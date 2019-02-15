@@ -23,7 +23,7 @@ USER $APPLICATION_USER
 
 EXPOSE 23513/tcp
 
-COPY --from=build /build/build/libs/tyler-fat.jar /app/tank-fat.jar
+COPY --from=build /build/build/libs/tank-fat.jar /app/tank-fat.jar
 COPY --from=build /build/scripts/start.sh /app/start.sh
 WORKDIR /app
 
