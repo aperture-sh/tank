@@ -17,7 +17,7 @@ build:
     - build
     expire_in: 30 minutes
 
-build_image_master:
+build_image:
   image: docker:stable
   stage: build
   services:
