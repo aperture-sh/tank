@@ -15,7 +15,7 @@ import io.ktor.util.InternalAPI
 import io.ktor.util.decodeString
 import io.marauder.supercharged.Projector
 import io.marauder.supercharged.models.GeoJSON
-import io.marauder.tyler.tiling.Tiler
+import io.marauder.tank.tiling.Tiler
 import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlinx.serialization.json.JSON
 import kotlinx.serialization.json.JsonParsingException
@@ -36,8 +36,10 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         val cluster = Cluster.builder().addContactPoint("127.0.0.1").build()
         val session = cluster.connect("geo")
+        val tiler = Tiler(session)
 
-         val q = session.prepare("SELECT geometry, id FROM features WHERE z=? AND x=? AND y=?;")
+
+        val q = session.prepare("SELECT geometry, id FROM features WHERE z=? AND x=? AND y=?;")
 
 
 
@@ -73,7 +75,6 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             }
 
             post("/") {
-                val tiler = Tiler(session)
                 val projector = Projector()
                 val geojson = JSON.plain.parse<GeoJSON>(call.receiveText())
                 val neu = projector.projectFeatures(geojson)
@@ -97,7 +98,6 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 res.forEach { row ->
                     val f = vector_tile.VectorTile.Tile.Feature.newBuilder()
                     val g = JSON.plain.parseList<Int>(row.getBytes(0).decodeString())
-                    println(g)
                     f.setType(VectorTile.Tile.GeomType.POLYGON)
                     f.addAllGeometry(g)
                     layer.addFeatures(f.build())

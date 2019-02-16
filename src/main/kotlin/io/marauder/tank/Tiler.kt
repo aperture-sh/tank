@@ -1,4 +1,4 @@
-package io.marauder.tyler.tiling
+package io.marauder.tank.tiling
 
 import com.datastax.driver.core.Session
 import io.marauder.supercharged.Clipper
@@ -18,7 +18,7 @@ import kotlin.math.pow
 
 class Tiler(
         private val session: Session,
-        private val minZoom: Int = 5,
+        private val minZoom: Int = 2,
         private val maxZoom: Int = 15,
         private val maxInsert: Int = 500000,
         private val chunkInsert: Int = 250000,
