@@ -1,5 +1,6 @@
 package io.marauder.tank
 
+import com.datastax.driver.core.Cluster
 import io.ktor.application.*
 import io.ktor.response.*
 import io.ktor.request.*
@@ -10,15 +11,35 @@ import org.slf4j.event.*
 import java.time.*
 import io.ktor.http.content.resources
 import io.ktor.http.content.static
+import io.ktor.util.InternalAPI
+import io.ktor.util.decodeString
+import io.marauder.supercharged.Projector
+import io.marauder.supercharged.models.GeoJSON
+import io.marauder.tyler.tiling.Tiler
+import kotlinx.serialization.ImplicitReflectionSerializer
+import kotlinx.serialization.json.JSON
 import kotlinx.serialization.json.JsonParsingException
+import kotlinx.serialization.parse
+import kotlinx.serialization.parseList
+import vector_tile.VectorTile
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
+
+    @InternalAPI
+    @ImplicitReflectionSerializer
     fun Application.module() {
 
         val baseLayer = environment.config.propertyOrNull("ktor.application.base_layer")?.getString() ?: "io.marauder.tyler"
         val extend = environment.config.propertyOrNull("ktor.application.extend")?.getString()?.toInt() ?: 4096
         val buffer = environment.config.propertyOrNull("ktor.application.buffer")?.getString()?.toInt() ?: 64
+
+        val cluster = Cluster.builder().addContactPoint("127.0.0.1").build()
+        val session = cluster.connect("geo")
+
+         val q = session.prepare("SELECT geometry, id FROM features WHERE z=? AND x=? AND y=?;")
+
+
 
         install(Compression) {
             gzip {
@@ -52,7 +73,39 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             }
 
             post("/") {
+                val tiler = Tiler(session)
+                val projector = Projector()
+                val geojson = JSON.plain.parse<GeoJSON>(call.receiveText())
+                val neu = projector.projectFeatures(geojson)
+                tiler.tiler(neu)
+
+
                 call.respondText("Features Accepted", contentType = ContentType.Text.Plain, status = HttpStatusCode.Accepted)
+            }
+
+            get("/tile/{z}/{x}/{y}") {
+                val bound = q.bind()
+                        .setInt(0, call.parameters["z"]?.toInt()?:-1)
+                        .setInt(1, call.parameters["x"]?.toInt()?:-1)
+                        .setInt(2, call.parameters["y"]?.toInt()?:-1)
+
+                val res = session.execute(bound)
+                val layer = vector_tile.VectorTile.Tile.Layer.newBuilder()
+                layer.setName("io.marauder.tank")
+                layer.setVersion(2)
+
+                res.forEach { row ->
+                    val f = vector_tile.VectorTile.Tile.Feature.newBuilder()
+                    val g = JSON.plain.parseList<Int>(row.getBytes(0).decodeString())
+                    println(g)
+                    f.setType(VectorTile.Tile.GeomType.POLYGON)
+                    f.addAllGeometry(g)
+                    layer.addFeatures(f.build())
+                }
+                val tile = vector_tile.VectorTile.Tile.newBuilder()
+                tile.addLayers(layer.build())
+
+                call.respondBytes(tile.build().toByteArray())
             }
 
             static("/static") {
