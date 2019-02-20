@@ -30,11 +30,12 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
     @ImplicitReflectionSerializer
     fun Application.module() {
 
-        val baseLayer = environment.config.propertyOrNull("ktor.application.base_layer")?.getString() ?: "io.marauder.tyler"
+        val baseLayer = environment.config.propertyOrNull("ktor.application.base_layer")?.getString() ?: "io.marauder.tank"
         val extend = environment.config.propertyOrNull("ktor.application.extend")?.getString()?.toInt() ?: 4096
         val buffer = environment.config.propertyOrNull("ktor.application.buffer")?.getString()?.toInt() ?: 64
+        val dbHost = environment.config.propertyOrNull("ktor.application.db_host")?.getString() ?: "localhost"
 
-        val cluster = Cluster.builder().addContactPoint("127.0.0.1").build()
+        val cluster = Cluster.builder().addContactPoint(dbHost).build()
         val session = cluster.connect("geo")
         val tiler = Tiler(session)
 
