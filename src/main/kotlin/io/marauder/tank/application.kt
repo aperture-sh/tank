@@ -14,6 +14,7 @@ import io.ktor.http.content.static
 import io.ktor.util.InternalAPI
 import io.ktor.util.decodeString
 import io.marauder.supercharged.Projector
+import io.marauder.supercharged.models.Feature
 import io.marauder.supercharged.models.GeoJSON
 import io.marauder.tank.tiling.Tiler
 import kotlinx.serialization.ImplicitReflectionSerializer
@@ -75,9 +76,24 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 call.respondText("Tank Tyle Database is running")
             }
 
-            post("/") {
+            post("/file") {
                 val projector = Projector()
                 val geojson = JSON.plain.parse<GeoJSON>(call.receiveText())
+                val neu = projector.projectFeatures(geojson)
+                tiler.tiler(neu)
+
+
+                call.respondText("Features Accepted", contentType = ContentType.Text.Plain, status = HttpStatusCode.Accepted)
+            }
+
+            post("/") {
+                val projector = Projector()
+
+                val features = mutableListOf<Feature>()
+                call.receiveStream().bufferedReader().useLines { lines ->
+                    lines.forEach { features.add(JSON.plain.parse(it)) }
+                }
+                val geojson = GeoJSON(features = features)
                 val neu = projector.projectFeatures(geojson)
                 tiler.tiler(neu)
 
