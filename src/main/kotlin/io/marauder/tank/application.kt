@@ -17,6 +17,8 @@ import io.marauder.supercharged.Projector
 import io.marauder.supercharged.models.Feature
 import io.marauder.supercharged.models.GeoJSON
 import io.marauder.tank.tiling.Tiler
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlinx.serialization.json.JSON
 import kotlinx.serialization.json.JsonParsingException
@@ -79,8 +81,10 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             post("/file") {
                 val projector = Projector()
                 val geojson = JSON.plain.parse<GeoJSON>(call.receiveText())
-                val neu = projector.projectFeatures(geojson)
-                tiler.tiler(neu)
+                GlobalScope.launch {
+                    val neu = projector.projectFeatures(geojson)
+                    tiler.tiler(neu)
+                }
 
 
                 call.respondText("Features Accepted", contentType = ContentType.Text.Plain, status = HttpStatusCode.Accepted)
@@ -94,9 +98,10 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     lines.forEach { features.add(JSON.plain.parse(it)) }
                 }
                 val geojson = GeoJSON(features = features)
-                val neu = projector.projectFeatures(geojson)
-                tiler.tiler(neu)
-
+                GlobalScope.launch {
+                    val neu = projector.projectFeatures(geojson)
+                    tiler.tiler(neu)
+                }
 
                 call.respondText("Features Accepted", contentType = ContentType.Text.Plain, status = HttpStatusCode.Accepted)
             }
