@@ -2,7 +2,7 @@
 
 `application.kt` contains the main module to start the server application.
 
-### Prequisites
+### Prerequisites
 Connect using the cqshl:  
 `docker run -it --link some-cassandra:cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR"'`
 
@@ -22,6 +22,7 @@ CREATE TABLE features (z int, x int, y int, id text, geometry blob, PRIMARY KEY 
 
 ### REST API
 
+`GET /` - Print Tank info message  
 `POST /` - Import GeoJSON features line separated  
 `POST /file` -  Import GeoJSON feature collection as one file  
 `GET /z/x/y` - Request a complete tile
