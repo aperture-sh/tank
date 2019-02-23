@@ -33,18 +33,30 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
     @ImplicitReflectionSerializer
     fun Application.module() {
 
+        val minZoom = environment.config.propertyOrNull("ktor.application.min_zoom")?.getString()?.toInt() ?: 2
+        val maxZoom = environment.config.propertyOrNull("ktor.application.max_zoom")?.getString()?.toInt() ?: 15
         val baseLayer = environment.config.propertyOrNull("ktor.application.base_layer")?.getString() ?: "io.marauder.tank"
         val extend = environment.config.propertyOrNull("ktor.application.extend")?.getString()?.toInt() ?: 4096
+        val attrFields = environment.config.propertyOrNull("ktor.application.attr_field")?.getList() ?: emptyList()
         val buffer = environment.config.propertyOrNull("ktor.application.buffer")?.getString()?.toInt() ?: 64
         val dbHost = environment.config.propertyOrNull("ktor.application.db_host")?.getString() ?: "localhost"
+        val dbHosts = environment.config.propertyOrNull("ktor.application.db_hosts")?.getList() ?: emptyList()
 
-        val cluster = Cluster.builder().addContactPoint(dbHost).build()
+        val cluster = Cluster.builder().apply {
+            if (dbHosts.isNotEmpty()) {
+                dbHosts.forEach {
+                    addContactPoint(it)
+                }
+            } else {
+                addContactPoint(dbHost)
+            }
+        }.build()
+
         val session = cluster.connect("geo")
-        val tiler = Tiler(session)
-
+        val tiler = Tiler(session, minZoom, maxZoom, extend, buffer)
+        val projector = Projector()
 
         val q = session.prepare("SELECT geometry, id FROM features WHERE z=? AND x=? AND y=?;")
-
 
 
         install(Compression) {
@@ -79,7 +91,6 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             }
 
             post("/file") {
-                val projector = Projector()
                 val geojson = JSON.plain.parse<GeoJSON>(call.receiveText())
                 GlobalScope.launch {
                     val neu = projector.projectFeatures(geojson)
@@ -114,13 +125,13 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
                 val res = session.execute(bound)
                 val layer = vector_tile.VectorTile.Tile.Layer.newBuilder()
-                layer.setName("io.marauder.tank")
-                layer.setVersion(2)
+                layer.name = baseLayer
+                layer.version = 2
 
                 res.forEach { row ->
                     val f = vector_tile.VectorTile.Tile.Feature.newBuilder()
                     val g = JSON.plain.parseList<Int>(row.getBytes(0).decodeString())
-                    f.setType(VectorTile.Tile.GeomType.POLYGON)
+                    f.type = VectorTile.Tile.GeomType.POLYGON
                     f.addAllGeometry(g)
                     layer.addFeatures(f.build())
                 }
@@ -136,7 +147,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
             install(StatusPages) {
                 exception<OutOfMemoryError> {
-                    call.respond(status = HttpStatusCode.InternalServerError, message = "Out of memory: reduce file size")
+                    call.respond(status = HttpStatusCode.InternalServerError, message = "Out of memory: reduce file/bulk size")
                 }
 
                 exception<JsonParsingException> {
