@@ -31,7 +31,7 @@ build_image:
   - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
   script:
   - docker pull $UPSTREAM_IMAGE:latest || true
-  - docker build --cache-from $UPSTREAM_IMAGE:latest --tag $CI_REGISTRY_IMAGE:$CI_BUILD_REF --tag $CI_REGISTRY_IMAGE:latest --build-arg artifactory_user --build-arg artifactory_password --build-arg artifactory_contextUrl .
+  - docker build --cache-from $UPSTREAM_IMAGE:latest --tag $CI_REGISTRY_IMAGE:$CI_BUILD_REF --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME --tag $CI_REGISTRY_IMAGE:latest --build-arg artifactory_user --build-arg artifactory_password --build-arg artifactory_contextUrl .
   - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF
   - if [ "${CI_COMMIT_REF_NAME}" != "master" ]; then docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME; fi;
   - if [ "${CI_COMMIT_REF_NAME}" == "master" ]; then docker push $CI_REGISTRY_IMAGE:latest; fi;
