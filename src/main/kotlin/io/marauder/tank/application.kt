@@ -102,8 +102,6 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             }
 
             post("/") {
-                val projector = Projector()
-
                 val features = mutableListOf<Feature>()
                 call.receiveStream().bufferedReader().useLines { lines ->
                     lines.forEach { features.add(JSON.plain.parse(it)) }
