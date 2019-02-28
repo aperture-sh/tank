@@ -40,7 +40,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val attrFields = environment.config.propertyOrNull("ktor.application.attr_field")?.getList() ?: emptyList()
         val buffer = environment.config.propertyOrNull("ktor.application.buffer")?.getString()?.toInt() ?: 64
         val dbHost = environment.config.propertyOrNull("ktor.application.db_host")?.getString() ?: "localhost"
-        val dbHosts = environment.config.propertyOrNull("ktor.application.db_hosts")?.getList() ?: emptyList()
+        val dbHosts = environment.config.propertyOrNull("ktor.application.db_hosts")?.getString()?.split(",")?.map { it.trim() } ?: emptyList()
 
         val cluster = Cluster.builder().apply {
             if (dbHosts.isNotEmpty()) {
