@@ -6,7 +6,7 @@
 Run a Cassandra instance:  
 `docker run --name cassandra -d  -p 9042:9042 cassandra:latest`  
 Connect using the cqshl:  
-`docker run -it --link some-cassandra:cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR"'`
+`docker run -it --link cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR"'`
 
 Replace `N` with choosen replication factor, e.g. `1` and run:
 ```sql
