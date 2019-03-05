@@ -24,14 +24,20 @@ import kotlinx.serialization.json.JSON
 import kotlinx.serialization.json.JsonParsingException
 import kotlinx.serialization.parse
 import kotlinx.serialization.parseList
+import org.awaitility.Awaitility.await
+import org.slf4j.LoggerFactory
 import vector_tile.VectorTile
+import java.util.concurrent.TimeUnit.MINUTES
+import java.util.concurrent.TimeUnit.SECONDS
+
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
-
 
     @InternalAPI
     @ImplicitReflectionSerializer
     fun Application.module() {
+
+        val marker = Benchmark(LoggerFactory.getLogger(this::class.java))
 
         val minZoom = environment.config.propertyOrNull("ktor.application.min_zoom")?.getString()?.toInt() ?: 2
         val maxZoom = environment.config.propertyOrNull("ktor.application.max_zoom")?.getString()?.toInt() ?: 15
@@ -42,7 +48,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val dbHost = environment.config.propertyOrNull("ktor.application.db_host")?.getString() ?: "localhost"
         val dbHosts = environment.config.propertyOrNull("ktor.application.db_hosts")?.getString()?.split(",")?.map { it.trim() } ?: emptyList()
 
-        val cluster = Cluster.builder().apply {
+        val clusterBuilder = Cluster.builder().apply {
             if (dbHosts.isNotEmpty()) {
                 dbHosts.forEach {
                     addContactPoint(it)
@@ -50,8 +56,16 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             } else {
                 addContactPoint(dbHost)
             }
-        }.build()
+        }
 
+        await().with()
+                .pollDelay(5, SECONDS)
+                .pollInterval(2, SECONDS)
+                .atMost(1, MINUTES)
+                .ignoreExceptions()
+                .until { initCassandra(clusterBuilder) }
+
+        val cluster = clusterBuilder.build()
         val session = cluster.connect("geo")
         val tiler = Tiler(session, minZoom, maxZoom, extend, buffer)
         val projector = Projector()
@@ -121,11 +135,15 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                         .setInt(1, call.parameters["x"]?.toInt()?:-1)
                         .setInt(2, call.parameters["y"]?.toInt()?:-1)
 
+                var endLog = marker.startLog("CQL statement execution - query={} z={} x={} y={}",
+                        bound.preparedStatement().queryString, bound.getInt(0), bound.getInt(1), bound.getInt(2))
                 val res = session.execute(bound)
+                endLog("CQL statement execution")
                 val layer = vector_tile.VectorTile.Tile.Layer.newBuilder()
                 layer.name = baseLayer
                 layer.version = 2
 
+                endLog = marker.startLog("vector file encoding")
                 res.forEach { row ->
                     val f = vector_tile.VectorTile.Tile.Feature.newBuilder()
                     val g = JSON.plain.parseList<Int>(row.getBytes(0).decodeString())
@@ -135,6 +153,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 }
                 val tile = vector_tile.VectorTile.Tile.newBuilder()
                 tile.addLayers(layer.build())
+                endLog("vector file encoding")
 
                 call.respondBytes(tile.build().toByteArray())
             }
@@ -154,4 +173,17 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
             }
         }
+    }
+
+    private fun initCassandra(clusterBuilder: Cluster.Builder): Boolean {
+        val cluster = clusterBuilder.build()
+        val session = cluster.connect()
+        session.execute("CREATE  KEYSPACE IF NOT EXISTS geo " +
+                "WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };")
+        session.execute("USE geo;")
+        session.execute("CREATE TABLE IF NOT EXISTS features " +
+                "(z int, x int, y int, id text, geometry blob, PRIMARY KEY (z, x, y, id));")
+        session.close()
+        cluster.close()
+        return true
     }
