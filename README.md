@@ -3,10 +3,12 @@
 `application.kt` contains the main module to start the server application.
 
 ### Prerequisites
+Run a Cassandra instance:  
+`docker run --name cassandra -d  -p 9042:9042 cassandra:latest`  
 Connect using the cqshl:  
-`docker run -it --link some-cassandra:cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR"'`
+`docker run -it --link cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR"'`
 
-Run:
+Replace `N` with choosen replication factor, e.g. `1` and run:
 ```sql
 CREATE  KEYSPACE geo
    WITH REPLICATION = { 
@@ -18,7 +20,8 @@ CREATE TABLE features (z int, x int, y int, id text, geometry blob, PRIMARY KEY 
 
 ### Quick Start
 
-`docker run --name tank -d -p 8888:8888 -e TANK_DB_HOST=cassandra --link cassandra tank`
+The `TANK_DB_HOSTS` variable is a comma-separated host list  
+`docker run --name tank -d -p 8888:8888 -e TANK_DB_HOSTS=cassandra --link cassandra tank`
 
 ### REST API
 
