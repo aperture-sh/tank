@@ -17,18 +17,14 @@ import io.marauder.supercharged.Projector
 import io.marauder.supercharged.models.Feature
 import io.marauder.supercharged.models.GeoJSON
 import io.marauder.tank.tiling.Tiler
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlinx.serialization.json.JSON
 import kotlinx.serialization.json.JsonParsingException
 import kotlinx.serialization.parse
 import kotlinx.serialization.parseList
-import org.awaitility.Awaitility.await
 import org.slf4j.LoggerFactory
 import vector_tile.VectorTile
-import java.util.concurrent.TimeUnit.MINUTES
-import java.util.concurrent.TimeUnit.SECONDS
 
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
@@ -41,12 +37,14 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         val minZoom = environment.config.propertyOrNull("ktor.application.min_zoom")?.getString()?.toInt() ?: 2
         val maxZoom = environment.config.propertyOrNull("ktor.application.max_zoom")?.getString()?.toInt() ?: 15
-        val baseLayer = environment.config.propertyOrNull("ktor.application.base_layer")?.getString() ?: "io.marauder.tank"
+        val baseLayer = environment.config.propertyOrNull("ktor.application.base_layer")?.getString()
+                ?: "io.marauder.tank"
         val extend = environment.config.propertyOrNull("ktor.application.extend")?.getString()?.toInt() ?: 4096
         val attrFields = environment.config.propertyOrNull("ktor.application.attr_field")?.getList() ?: emptyList()
         val buffer = environment.config.propertyOrNull("ktor.application.buffer")?.getString()?.toInt() ?: 64
         val dbHost = environment.config.propertyOrNull("ktor.application.db_host")?.getString() ?: "localhost"
-        val dbHosts = environment.config.propertyOrNull("ktor.application.db_hosts")?.getString()?.split(",")?.map { it.trim() } ?: emptyList()
+        val dbHosts = environment.config.propertyOrNull("ktor.application.db_hosts")?.getString()?.split(",")?.map { it.trim() }
+                ?: emptyList()
 
         val clusterBuilder = Cluster.builder().apply {
             if (dbHosts.isNotEmpty()) {
@@ -58,12 +56,19 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             }
         }
 
-        await().with()
-                .pollDelay(5, SECONDS)
-                .pollInterval(2, SECONDS)
-                .atMost(1, MINUTES)
-                .ignoreExceptions()
-                .until { initCassandra(clusterBuilder) }
+        var isConnected = false
+        var attempts = 10
+        while (!isConnected && attempts >= 0) {
+            try {
+                initCassandra(clusterBuilder)
+                isConnected = true
+            } catch (e: RuntimeException) {
+                attempts--
+                runBlocking {
+                    delay(3_000)
+                }
+            }
+        }
 
         val cluster = clusterBuilder.build()
         val session = cluster.connect("geo")

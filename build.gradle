@@ -71,9 +71,6 @@ dependencies {
     compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
     compile group: 'ch.qos.logback', name: 'logback-core', version: '1.2.3'
     compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
-    compile group: 'net.logstash.logback', name: 'logstash-logback-encoder', version: '5.3'
-
-    compile group: 'org.awaitility', name: 'awaitility-kotlin', version: '3.1.6'
 
     testCompile "io.ktor:ktor-server-tests:$ktor_version"
     testCompile "io.ktor:ktor-server-core:$ktor_version"
