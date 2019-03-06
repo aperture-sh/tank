@@ -6,43 +6,22 @@ services:
     container_name: cassandra
     volumes:
     - cassandra_data:/var/lib/cassandra
-    - ./cassandra/conf/jvm.options:/etc/cassandra/jvm.options
-    ports:
-    - '7000:7000' # Inter-node cluster communication
-    - '7001:7001' # SSL inter-node cluster communication
-    - '7199:7199' # Cassandra JMX monitoring
-    - '9042:9042' # CQL native transport port
-    - '9160:9160' # Thrift client port
-    networks:
-    - tanknet
 
   tank:
-    build:
-      context: .
-    container_name: tank
+    build: .
     environment:
       - TANK_DB_HOSTS=cassandra
+      - LOG_PATH=/app/logs
     volumes:
     - tank_log:/app/logs
     ports:
     - '8888:8888'
-    networks:
-    - tanknet
-    depends_on:
-    - cassandra
 
   filebeat:
-    build:
-      context: filebeat/
-      args:
-        ELK_VERSION: $ELK_VERSION
-    container_name: filebeat
+    image: docker.elastic.co/beats/filebeat:6.6.1
     volumes:
-    - tank_log:/usr/share/filebeat/logs/tank:ro
-
-networks:
-  tanknet:
-    driver: bridge
+      - tank_log:/usr/share/filebeat/logs/tank:ro
+      - $FILEBEAT_CONF_PATH:/usr/share/filebeat/filebeat.yml:ro
 
 volumes:
   cassandra_data:
