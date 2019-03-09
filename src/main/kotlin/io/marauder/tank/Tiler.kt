@@ -108,9 +108,9 @@ class Tiler(
                         .setString(3, UUID.randomUUID().toString())
                         .setBytes(4, buf)
 
-                endLog = marker.startLog("sending bounds to database")
+                endLog = marker.startLog("Store geometry to database")
                 session.execute(bound)
-                endLog("sending bounds to database")
+                endLog("Store geometry to database")
             }
 
         }

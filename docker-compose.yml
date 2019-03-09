@@ -3,12 +3,11 @@ version: '3'
 services:
   cassandra:
     image: cassandra:3.11
-    container_name: cassandra
     volumes:
     - cassandra_data:/var/lib/cassandra
 
   tank:
-    build: .
+    image: geocode.igd.fraunhofer.de:4567/marauder/tank:latest
     environment:
       - TANK_DB_HOSTS=cassandra
       - LOG_PATH=/app/logs
