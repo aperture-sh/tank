@@ -28,14 +28,15 @@ class Tiler(
     private val projector = Projector(extend)
     private val intersector = Intersector()
     private val clipper = Clipper()
-    private val q = session.prepare("INSERT INTO features (z,x,y,id,geometry) VALUES (?, ?, ?, ?, ?)")
+//    private val q = session.prepare("INSERT INTO features (z,x,y,id,geometry) VALUES (?, ?, ?, ?, ?)")
+    private val q = session.prepare("INSERT INTO features (timestamp,id,geometry) VALUES (toUnixTimestamp(now()), ?, ?)")
 
 
     @ImplicitReflectionSerializer
     fun tiler(input: GeoJSON) {
 
             println("calculating bounding box: ${input.features.size} features")
-            projector.calcBbox(input)
+//            projector.calcBbox(input)
             println("start split")
 
             //TODO: wrap geometries at 180 degree
@@ -47,11 +48,19 @@ class Tiler(
 
 //        val merged = FeatureCollection(features = left.features + right.features + center.features)
 
-            (minZoom..maxZoom).forEach { zoomLvL ->
+        input.features.forEach { f ->
+            val bound = q.bind()
+                    .setString(0, UUID.randomUUID().toString())
+                    .setString(1, f.geometry.toWKT())
+
+            session.execute(bound)
+        }
+
+            /*(minZoom..maxZoom).forEach { zoomLvL ->
                 println("\rzoom level: $zoomLvL")
                     traverseZoom(input, zoomLvL)
 
-            }
+            }*/
             println("\rfinished split: ${input.features.size} features")
     }
 

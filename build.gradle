@@ -62,6 +62,7 @@ dependencies {
     compile group: 'io.marauder.supercharger', name: 'clipper', version: '0.0.3-SNAPSHOT', changing: true
 
     compile 'com.google.protobuf:protobuf-java:3.0.0'
+    compile group: 'org.locationtech.jts', name: 'jts-core', version: '1.16.1'
 
     compile group: 'org.mongodb', name: 'mongo-java-driver', version: '3.5.0'
     compile group: 'org.xerial', name: 'sqlite-jdbc', version: '3.20.1'

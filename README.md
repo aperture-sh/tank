@@ -17,6 +17,16 @@ USE geo;
 CREATE TABLE features (z int, x int, y int, id text, geometry blob, PRIMARY KEY (z, x, y, id));
 ```
 
+```sql
+CREATE TABLE geo.features (
+    timestamp timestamp,
+    id text,
+    geometry text,
+    PRIMARY KEY (timestamp, id)
+)
+CREATE CUSTOM INDEX test_idx ON geo.features (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{       fields: { geometry: {             type: "geo_shape",             max_levels: 15          }       }    }'};
+```
+
 
 ### Quick Start
 

@@ -69,7 +69,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val tiler = Tiler(session, minZoom, maxZoom, extend, buffer)
         val projector = Projector()
 
-        val q = session.prepare("SELECT geometry, id FROM features WHERE z=? AND x=? AND y=?;")
+//        val q = session.prepare("SELECT geometry, id FROM features WHERE z=? AND x=? AND y=?;")
+        val q = session.prepare("SELECT geometry, id FROM features;")
 
 
         install(Compression) {
@@ -106,8 +107,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             post("/file") {
                 val geojson = JSON.plain.parse<GeoJSON>(call.receiveText())
                 GlobalScope.launch {
-                    val neu = projector.projectFeatures(geojson)
-                    tiler.tiler(neu)
+//                    val neu = projector.projectFeatures(geojson)
+                    tiler.tiler(geojson)
                 }
 
 
