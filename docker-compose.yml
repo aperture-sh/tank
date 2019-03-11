@@ -22,7 +22,7 @@ services:
       - tank_log:/usr/share/filebeat/logs/tank:ro
     command: |
       bash -c 'bash -s <<EOF
-        cat > /usr/share/filebeat/data/filebeat.yml <<EON
+        cat > data/filebeat.yml <<EON
           filebeat.inputs:
           - type: log
             enabled: true
