@@ -27,28 +27,9 @@ services:
           - type: log
             enabled: true
             paths:
-              - /usr/share/filebeat/logs/tank/*.log
-          output.elasticsearch:
-            hosts: ["elasticsearch:9200"]
-          processors:
-          - dissect:
-              tokenizer: "%{timestamp} %{+timestamp} %{thread} %{level->} %{logger} %{?minus} %{msg}"
-              field: "message"
-              target_prefix: "dissect"
-          - dissect:
-              when:
-                contains:
-                  dissect.msg: "Start"
-              tokenizer: "%{correlationId} %{?minus} %{orderToken} %{event}"
-              field: "dissect.msg"
-              target_prefix: "dissect"
-          - dissect:
-              when:
-                contains:
-                  dissect.msg: "Finish"
-              tokenizer: "%{correlationId} %{?minus} %{orderToken} %{event}"
-              field: "dissect.msg"
-              target_prefix: "dissect"
+              - logs/tank/benchmark*.log
+          output.logstash:
+            hosts: ["logstash:5044"]
       EON
        ./filebeat -c data/filebeat.yml -e
       EOF'

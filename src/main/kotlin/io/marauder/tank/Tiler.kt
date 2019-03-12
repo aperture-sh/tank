@@ -76,28 +76,28 @@ class Tiler(
         val k3 = 1 + k1
 
 
-        var endLog = marker.startLog("clipping - featureCount={} type={} z={} x={} y={}",
+        var endLog = marker.startLogDuration("clipping - featureCount={} type={} z={} x={} y={}",
                 f.features.size, f.type.name, z, x, y)
         val clipped = clipper.clip(f, z2.toDouble(), x - k1, x + k3, y - k1, y + k3)
-        endLog("clipping")
+        endLog()
 
         val encoder = Encoder()
 
         if (clipped.features.isNotEmpty()) {
 
-            endLog = marker.startLog("calculating bbox")
+            endLog = marker.startLogDuration("calculating bbox")
             projector.calcBbox(clipped)
-            endLog("calculating bbox")
+            endLog()
             println("\rencode: $z/$x/$y::${clipped.features.size}")
 
-            endLog = marker.startLog("transforming tiles")
+            endLog = marker.startLogDuration("transforming tiles")
             val trans = projector.transformTile(Tile(clipped, 1 shl z, x, y))
-            endLog("transforming tiles")
+            endLog()
 
             trans.geojson.features.forEach {
-                endLog = marker.startLog("encoding geometry {}", it.geometry)
+                endLog = marker.startLogDuration("encoding geometry - {}", it.geometry)
                 val g = encoder.encodeGeometry(it.geometry)
-                endLog("encoding geometry")
+                endLog()
 //                println(it.geometry)
 //                println(g)
                 val buf = ByteBuffer.wrap(JSON.plain.stringify(g).toByteArray())
@@ -108,9 +108,9 @@ class Tiler(
                         .setString(3, UUID.randomUUID().toString())
                         .setBytes(4, buf)
 
-                endLog = marker.startLog("Store geometry to database")
+                endLog = marker.startLogDuration("store geometry to database")
                 session.execute(bound)
-                endLog("Store geometry to database")
+                endLog()
             }
 
         }

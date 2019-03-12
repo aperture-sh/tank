@@ -134,15 +134,15 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                         .setInt(1, call.parameters["x"]?.toInt()?:-1)
                         .setInt(2, call.parameters["y"]?.toInt()?:-1)
 
-                var endLog = marker.startLog("CQL statement execution - query={} z={} x={} y={}",
+                var endLog = marker.startLogDuration("CQL statement execution - query={} z={} x={} y={}",
                         bound.preparedStatement().queryString, bound.getInt(0), bound.getInt(1), bound.getInt(2))
                 val res = session.execute(bound)
-                endLog("CQL statement execution")
+                endLog()
                 val layer = vector_tile.VectorTile.Tile.Layer.newBuilder()
                 layer.name = baseLayer
                 layer.version = 2
 
-                endLog = marker.startLog("vector file encoding")
+                endLog = marker.startLogDuration("vector file encoding")
                 res.forEach { row ->
                     val f = vector_tile.VectorTile.Tile.Feature.newBuilder()
                     val g = JSON.plain.parseList<Int>(row.getBytes(0).decodeString())
@@ -152,7 +152,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 }
                 val tile = vector_tile.VectorTile.Tile.newBuilder()
                 tile.addLayers(layer.build())
-                endLog("vector file encoding")
+                endLog()
 
                 call.respondBytes(tile.build().toByteArray())
             }
