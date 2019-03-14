@@ -68,6 +68,9 @@ dependencies {
 
     compile group: 'com.datastax.cassandra', name: 'cassandra-driver-core', version: '3.6.0'
 
+    compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
+    compile group: 'ch.qos.logback', name: 'logback-core', version: '1.2.3'
+    compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
 
     testCompile "io.ktor:ktor-server-tests:$ktor_version"
     testCompile "io.ktor:ktor-server-core:$ktor_version"
@@ -76,8 +79,6 @@ dependencies {
     testCompile "io.ktor:ktor-metrics:$ktor_version"
     testCompile "io.ktor:ktor-websockets:$ktor_version"
     testCompile "io.ktor:ktor-gson:$ktor_version"
-
-
 }
 
 shadowJar {

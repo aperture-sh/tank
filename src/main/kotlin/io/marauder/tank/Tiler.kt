@@ -7,13 +7,15 @@ import io.marauder.supercharged.Intersector
 import io.marauder.supercharged.Projector
 import io.marauder.supercharged.models.GeoJSON
 import io.marauder.supercharged.models.Tile
+import io.marauder.tank.Benchmark
 import kotlinx.coroutines.*
 import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlinx.serialization.json.JSON
 import kotlinx.serialization.stringify
+import org.slf4j.LoggerFactory
 import java.nio.Buffer
 import java.nio.ByteBuffer
-import java.util.*
+import java.util.UUID
 import kotlin.math.pow
 
 class Tiler(
@@ -73,17 +75,29 @@ class Tiler(
         val k1 = 0.5 * buffer / extend
         val k3 = 1 + k1
 
+
+        var endLog = marker.startLogDuration("clipping - featureCount={} type={} z={} x={} y={}",
+                f.features.size, f.type.name, z, x, y)
         val clipped = clipper.clip(f, z2.toDouble(), x - k1, x + k3, y - k1, y + k3)
+        endLog()
 
         val encoder = Encoder()
 
         if (clipped.features.isNotEmpty()) {
+
+            endLog = marker.startLogDuration("calculating bbox")
             projector.calcBbox(clipped)
+            endLog()
             println("\rencode: $z/$x/$y::${clipped.features.size}")
+
+            endLog = marker.startLogDuration("transforming tiles")
             val trans = projector.transformTile(Tile(clipped, 1 shl z, x, y))
+            endLog()
 
             trans.geojson.features.forEach {
+                endLog = marker.startLogDuration("encoding geometry - {}", it.geometry)
                 val g = encoder.encodeGeometry(it.geometry)
+                endLog()
 //                println(it.geometry)
 //                println(g)
                 val buf = ByteBuffer.wrap(JSON.plain.stringify(g).toByteArray())
@@ -94,13 +108,16 @@ class Tiler(
                         .setString(3, UUID.randomUUID().toString())
                         .setBytes(4, buf)
 
+                endLog = marker.startLogDuration("store geometry to database")
                 session.execute(bound)
-
-
+                endLog()
             }
 
         }
     }
 
+    companion object {
+        private val marker = Benchmark(LoggerFactory.getLogger(Tiler::class.java))
+    }
 
 }

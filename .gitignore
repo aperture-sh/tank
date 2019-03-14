@@ -3,6 +3,7 @@
 /out
 /build
 /bin
+/logs
 *.iml
 *.ipr
 *.iws

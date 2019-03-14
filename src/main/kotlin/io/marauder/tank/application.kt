@@ -17,36 +17,54 @@ import io.marauder.supercharged.Projector
 import io.marauder.supercharged.models.Feature
 import io.marauder.supercharged.models.GeoJSON
 import io.marauder.tank.tiling.Tiler
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlinx.serialization.json.JSON
 import kotlinx.serialization.json.JsonParsingException
 import kotlinx.serialization.parse
 import kotlinx.serialization.parseList
+import org.slf4j.LoggerFactory
 import vector_tile.VectorTile
 
-fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
+fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
     @InternalAPI
     @ImplicitReflectionSerializer
     fun Application.module() {
 
+        val marker = Benchmark(LoggerFactory.getLogger(this::class.java))
+
         val minZoom = environment.config.propertyOrNull("ktor.application.min_zoom")?.getString()?.toInt() ?: 2
         val maxZoom = environment.config.propertyOrNull("ktor.application.max_zoom")?.getString()?.toInt() ?: 15
-        val baseLayer = environment.config.propertyOrNull("ktor.application.base_layer")?.getString() ?: "io.marauder.tank"
+        val baseLayer = environment.config.propertyOrNull("ktor.application.base_layer")?.getString()
+                ?: "io.marauder.tank"
         val extend = environment.config.propertyOrNull("ktor.application.extend")?.getString()?.toInt() ?: 4096
         val attrFields = environment.config.propertyOrNull("ktor.application.attr_field")?.getList() ?: emptyList()
         val buffer = environment.config.propertyOrNull("ktor.application.buffer")?.getString()?.toInt() ?: 64
         val dbHosts = environment.config.propertyOrNull("ktor.application.db_hosts")?.getString()?.split(",")?.map { it.trim() } ?: listOf("localhost")
 
-        val cluster = Cluster.builder().apply {
-                dbHosts.forEach {
-                    addContactPoint(it)
-                }
-        }.build()
+        val clusterBuilder = Cluster.builder().apply {
+            dbHosts.forEach {
+                addContactPoint(it)
+            }
+        }
 
+        var isConnected = false
+        var attempts = 10
+        while (!isConnected && attempts >= 0) {
+            try {
+                initCassandra(clusterBuilder)
+                isConnected = true
+            } catch (e: RuntimeException) {
+                attempts--
+                runBlocking {
+                    delay(3_000)
+                }
+            }
+        }
+
+        val cluster = clusterBuilder.build()
         val session = cluster.connect("geo")
         val tiler = Tiler(session, minZoom, maxZoom, extend, buffer)
         val projector = Projector()
@@ -116,11 +134,15 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                         .setInt(1, call.parameters["x"]?.toInt()?:-1)
                         .setInt(2, call.parameters["y"]?.toInt()?:-1)
 
+                var endLog = marker.startLogDuration("CQL statement execution - query={} z={} x={} y={}",
+                        bound.preparedStatement().queryString, bound.getInt(0), bound.getInt(1), bound.getInt(2))
                 val res = session.execute(bound)
+                endLog()
                 val layer = vector_tile.VectorTile.Tile.Layer.newBuilder()
                 layer.name = baseLayer
                 layer.version = 2
 
+                endLog = marker.startLogDuration("vector file encoding")
                 res.forEach { row ->
                     val f = vector_tile.VectorTile.Tile.Feature.newBuilder()
                     val g = JSON.plain.parseList<Int>(row.getBytes(0).decodeString())
@@ -130,6 +152,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 }
                 val tile = vector_tile.VectorTile.Tile.newBuilder()
                 tile.addLayers(layer.build())
+                endLog()
 
                 call.respondBytes(tile.build().toByteArray())
             }
@@ -149,4 +172,17 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
             }
         }
+    }
+
+    private fun initCassandra(clusterBuilder: Cluster.Builder): Boolean {
+        val cluster = clusterBuilder.build()
+        val session = cluster.connect()
+        session.execute("CREATE  KEYSPACE IF NOT EXISTS geo " +
+                "WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };")
+        session.execute("USE geo;")
+        session.execute("CREATE TABLE IF NOT EXISTS features " +
+                "(z int, x int, y int, id text, geometry blob, PRIMARY KEY (z, x, y, id));")
+        session.close()
+        cluster.close()
+        return true
     }

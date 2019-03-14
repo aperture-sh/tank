@@ -14,7 +14,7 @@ FROM openjdk:8-jre-alpine
 ENV APPLICATION_USER ktor
 RUN adduser -D -g '' $APPLICATION_USER
 
-RUN mkdir /app
+RUN mkdir -p /app/logs
 RUN mkdir /storage
 RUN chown -R $APPLICATION_USER /app
 RUN chown -R $APPLICATION_USER /storage
