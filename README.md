@@ -24,7 +24,20 @@ CREATE TABLE geo.features (
     geometry text,
     PRIMARY KEY (timestamp, id)
 )
-CREATE CUSTOM INDEX test_idx ON geo.features (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{       fields: { geometry: {             type: "geo_shape",             max_levels: 15          }       }    }'};
+CREATE CUSTOM INDEX test_idx ON geo.features (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{       fields: { geometry: {             type: "geo_shape",             max_levels: 3          }       }    }'};
+```
+
+```roomsql
+CREATE TABLE geo.features (
+    min_x int,
+    min_y int,
+    max_x int,
+    max_y int,
+    timestamp timestamp,
+    id text,
+    geometry text,
+    PRIMARY KEY ((min_x, min_y), max_x, max_y, timestamp, id)
+)
 ```
 
 

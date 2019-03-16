@@ -13,10 +13,11 @@ import io.ktor.http.content.resources
 import io.ktor.http.content.static
 import io.ktor.util.InternalAPI
 import io.ktor.util.decodeString
+import io.marauder.supercharged.Clipper
+import io.marauder.supercharged.Encoder
 import io.marauder.supercharged.Projector
-import io.marauder.supercharged.models.Feature
-import io.marauder.supercharged.models.GeoJSON
-import io.marauder.tank.tiling.Tiler
+import io.marauder.supercharged.models.*
+import io.marauder.tank.Tiler
 import kotlinx.coroutines.*
 import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlinx.serialization.json.JSON
@@ -70,7 +71,21 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val projector = Projector()
 
 //        val q = session.prepare("SELECT geometry, id FROM features WHERE z=? AND x=? AND y=?;")
-        val q = session.prepare("SELECT geometry, id FROM features;")
+
+        val query = """SELECT geometry, id FROM features WHERE expr(test_idx, '{
+            |   filter: {
+            |       type: "geo_bbox",
+            |       field: "geometry",
+            |       min_latitude: 0,
+            |       max_latitude: 0,
+            |       min_longitude: 0,
+            |       max_longitude: 0
+            |   }
+            |}');""".trimMargin()
+
+        println(query)
+
+        val q = session.prepare(query)
 
 
         install(Compression) {
@@ -130,32 +145,54 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             }
 
             get("/tile/{z}/{x}/{y}") {
+
+                val z = call.parameters["z"]?.toInt()?:-1
+                val x = call.parameters["x"]?.toInt()?:-1
+                val y = call.parameters["y"]?.toInt()?:-1
+
+                val box = projector.tileBBox(z, x, y)
+                println(box)
                 val bound = q.bind()
-                        .setInt(0, call.parameters["z"]?.toInt()?:-1)
-                        .setInt(1, call.parameters["x"]?.toInt()?:-1)
-                        .setInt(2, call.parameters["y"]?.toInt()?:-1)
+                        .setDouble(0, box[0])
+                        .setDouble(1, box[1])
+                        .setDouble(2, box[2])
+                        .setDouble(3, box[3])
 
                 var endLog = marker.startLogDuration("CQL statement execution - query={} z={} x={} y={}",
                         bound.preparedStatement().queryString, bound.getInt(0), bound.getInt(1), bound.getInt(2))
                 val res = session.execute(bound)
-                endLog()
-                val layer = vector_tile.VectorTile.Tile.Layer.newBuilder()
-                layer.name = baseLayer
-                layer.version = 2
 
-                endLog = marker.startLogDuration("vector file encoding")
-                res.forEach { row ->
-                    val f = vector_tile.VectorTile.Tile.Feature.newBuilder()
-                    val g = JSON.plain.parseList<Int>(row.getBytes(0).decodeString())
-                    f.type = VectorTile.Tile.GeomType.POLYGON
-                    f.addAllGeometry(g)
-                    layer.addFeatures(f.build())
+                val features = res.map { row ->
+                    Feature(
+                            geometry = Geometry.fromWKT(row.getBytes(0).decodeString())!!
+                    )
+
                 }
-                val tile = vector_tile.VectorTile.Tile.newBuilder()
-                tile.addLayers(layer.build())
-                endLog()
 
-                call.respondBytes(tile.build().toByteArray())
+                val geojson = projector.projectFeatures(GeoJSON(features = features))
+                val tile = projector.transformTile(Tile(geojson, z, x, y))
+
+                val z2 = 1 shl (if (z == 0) 0 else z)
+
+                val k1 = 0.5 * buffer / extend
+                val k3 = 1 + k1
+
+                projector.calcBbox(tile.geojson)
+
+                val clipper = Clipper()
+                val clipped = clipper.clip(tile.geojson, z2.toDouble(), x - k1, x + k3, y - k1, y + k3)
+
+
+                val encoder = Encoder()
+
+                val encoded = encoder.encode(clipped.features, baseLayer)
+
+
+
+
+
+
+                call.respondBytes(encoded.toByteArray())
             }
 
             static("/static") {
