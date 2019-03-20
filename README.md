@@ -12,7 +12,7 @@ Replace `N` with choosen replication factor, e.g. `1` and run:
 ```sql
 CREATE  KEYSPACE geo
    WITH REPLICATION = { 
-      'class' : 'SimpleStrategy', 'replication_factor' : N };
+      'class' : 'SimpleStrategy', 'replication_factor' : 1 };
 USE geo;
 CREATE TABLE features (z int, x int, y int, id text, geometry blob, PRIMARY KEY (z, x, y, id));
 ```
@@ -24,7 +24,7 @@ CREATE TABLE geo.features (
     geometry text,
     PRIMARY KEY (timestamp, id)
 )
-CREATE CUSTOM INDEX test_idx ON geo.features (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{       fields: { geometry: {             type: "geo_shape",             max_levels: 3          }       }    }'};
+CREATE CUSTOM INDEX test_idx ON geo.features (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{fields: { geometry: {type: "geo_shape", max_levels: 3, transformations: [{type: "bbox"}]}}}'};
 ```
 
 ```roomsql

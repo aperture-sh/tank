@@ -1,12 +1,14 @@
-package io.marauder.tank.tiling
+package io.marauder.tank
 
 import com.datastax.driver.core.Session
 import io.marauder.supercharged.Clipper
 import io.marauder.supercharged.Encoder
 import io.marauder.supercharged.Intersector
 import io.marauder.supercharged.Projector
+import io.marauder.supercharged.models.Feature
 import io.marauder.supercharged.models.GeoJSON
 import io.marauder.supercharged.models.Tile
+import io.marauder.supercharged.models.Value
 import io.marauder.tank.Benchmark
 import kotlinx.coroutines.*
 import kotlinx.serialization.ImplicitReflectionSerializer
@@ -49,8 +51,9 @@ class Tiler(
 //        val merged = FeatureCollection(features = left.features + right.features + center.features)
 
         input.features.forEach { f ->
+            val id = if (f.properties.containsKey("id")) (f.properties["id"] as Value.StringValue).value else UUID.randomUUID().toString()
             val bound = q.bind()
-                    .setString(0, UUID.randomUUID().toString())
+                    .setString(0, id)
                     .setString(1, f.geometry.toWKT())
 
             session.execute(bound)

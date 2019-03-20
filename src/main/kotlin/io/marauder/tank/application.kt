@@ -18,7 +18,8 @@ import io.marauder.supercharged.Encoder
 import io.marauder.supercharged.Projector
 import io.marauder.supercharged.models.*
 import io.marauder.tank.Tiler
-import kotlinx.coroutines.*
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlinx.serialization.json.JSON
 import kotlinx.serialization.json.JsonParsingException
@@ -72,16 +73,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
 //        val q = session.prepare("SELECT geometry, id FROM features WHERE z=? AND x=? AND y=?;")
 
-        val query = """SELECT geometry, id FROM features WHERE expr(test_idx, '{
-            |   filter: {
-            |       type: "geo_bbox",
-            |       field: "geometry",
-            |       min_latitude: 0,
-            |       max_latitude: 0,
-            |       min_longitude: 0,
-            |       max_longitude: 0
-            |   }
-            |}');""".trimMargin()
+        val query = """SELECT geometry, id FROM features WHERE expr(test_idx, ?);""".trimMargin()
 
         println(query)
 
@@ -122,8 +114,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             post("/file") {
                 val geojson = JSON.plain.parse<GeoJSON>(call.receiveText())
                 GlobalScope.launch {
-//                    val neu = projector.projectFeatures(geojson)
-                    tiler.tiler(geojson)
+                    val neu = projector.projectFeatures(geojson)
+                    tiler.tiler(neu)
                 }
 
 
@@ -151,46 +143,65 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 val y = call.parameters["y"]?.toInt()?:-1
 
                 val box = projector.tileBBox(z, x, y)
-                println(box)
+//                println(box)
+
+                val poly = Geometry.Polygon(coordinates = listOf(listOf(
+                        listOf(box[0], box[1]),
+                        listOf(box[2], box[1]),
+                        listOf(box[2], box[3]),
+                        listOf(box[0], box[3]),
+                        listOf(box[0], box[1])
+                )))
+
+                val jsonQuery = """
+                    {
+                        filter: {
+                         type: "geo_shape",
+                         field: "geometry",
+                         operation: "intersects",
+                         shape: {
+                            type: "wkt",
+                            value: "${projector.projectFeature(Feature(geometry = poly)).geometry.toWKT()}"
+                         }
+                        }
+                    }
+                """.trimIndent()
+
+//                println(jsonQuery)
+
                 val bound = q.bind()
-                        .setDouble(0, box[0])
-                        .setDouble(1, box[1])
-                        .setDouble(2, box[2])
-                        .setDouble(3, box[3])
+                        .setString(0, jsonQuery)
 
                 var endLog = marker.startLogDuration("CQL statement execution - query={} z={} x={} y={}",
                         bound.preparedStatement().queryString, bound.getInt(0), bound.getInt(1), bound.getInt(2))
                 val res = session.execute(bound)
 
                 val features = res.map { row ->
+//                    println(row.getString(1))
                     Feature(
-                            geometry = Geometry.fromWKT(row.getBytes(0).decodeString())!!
+                            geometry = Geometry.fromWKT(row.getString(0))!!,
+                            properties = mapOf("id" to Value.StringValue(row.getString(1)))
                     )
 
                 }
 
-                val geojson = projector.projectFeatures(GeoJSON(features = features))
-                val tile = projector.transformTile(Tile(geojson, z, x, y))
+                val geojson = GeoJSON(features = features)
+//                val tile = projector.transformTile(Tile(geojson, z, x, y))
 
                 val z2 = 1 shl (if (z == 0) 0 else z)
 
                 val k1 = 0.5 * buffer / extend
                 val k3 = 1 + k1
 
-                projector.calcBbox(tile.geojson)
+                projector.calcBbox(geojson)
 
                 val clipper = Clipper()
-                val clipped = clipper.clip(tile.geojson, z2.toDouble(), x - k1, x + k3, y - k1, y + k3)
-
+                val clipped = clipper.clip(geojson, z2.toDouble(), x - k1, x + k3, y - k1, y + k3)
+                val tile = projector.transformTile(Tile(clipped, (1 shl z), x, y))
 
                 val encoder = Encoder()
 
-                val encoded = encoder.encode(clipped.features, baseLayer)
-
-
-
-
-
+                val encoded = encoder.encode(tile.geojson.features, baseLayer)
 
                 call.respondBytes(encoded.toByteArray())
             }
