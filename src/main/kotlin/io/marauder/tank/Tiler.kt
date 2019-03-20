@@ -50,13 +50,17 @@ class Tiler(
 
 //        val merged = FeatureCollection(features = left.features + right.features + center.features)
 
-        input.features.forEach { f ->
+        println("#${input.features.size} features importing starts")
+        input.features.forEachIndexed { i, f ->
             val id = if (f.properties.containsKey("id")) (f.properties["id"] as Value.StringValue).value else UUID.randomUUID().toString()
             val bound = q.bind()
                     .setString(0, id)
                     .setString(1, f.geometry.toWKT())
 
+            val endLog = marker.startLogDuration("store geometry to database")
             session.execute(bound)
+            endLog()
+            if (i % 1000 == 0) println("#$i features stored to DB")
         }
 
             /*(minZoom..maxZoom).forEach { zoomLvL ->
@@ -64,7 +68,8 @@ class Tiler(
                     traverseZoom(input, zoomLvL)
 
             }*/
-            println("\rfinished split: ${input.features.size} features")
+
+        println("#${input.features.size} features importing finished")
     }
 
     @ImplicitReflectionSerializer

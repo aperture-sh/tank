@@ -19,7 +19,9 @@ import io.marauder.supercharged.Projector
 import io.marauder.supercharged.models.*
 import io.marauder.tank.Tiler
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlinx.serialization.json.JSON
 import kotlinx.serialization.json.JsonParsingException
@@ -138,6 +140,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
             get("/tile/{z}/{x}/{y}") {
 
+                var endLog = marker.startLogDuration("prepare query")
                 val z = call.parameters["z"]?.toInt()?:-1
                 val x = call.parameters["x"]?.toInt()?:-1
                 val y = call.parameters["y"]?.toInt()?:-1
@@ -172,10 +175,14 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 val bound = q.bind()
                         .setString(0, jsonQuery)
 
-                var endLog = marker.startLogDuration("CQL statement execution - query={} z={} x={} y={}",
+                endLog()
+
+                endLog = marker.startLogDuration("CQL statement execution - query={} z={} x={} y={}",
                         bound.preparedStatement().queryString, bound.getInt(0), bound.getInt(1), bound.getInt(2))
                 val res = session.execute(bound)
+                endLog()
 
+                endLog = marker.startLogDuration("prepare features for encoding")
                 val features = res.map { row ->
 //                    println(row.getString(1))
                     Feature(
@@ -201,9 +208,12 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
                 val encoder = Encoder()
 
+                endLog()
+                endLog = marker.startLogDuration("encode and transmit")
                 val encoded = encoder.encode(tile.geojson.features, baseLayer)
 
                 call.respondBytes(encoded.toByteArray())
+                endLog()
             }
 
             static("/static") {
