@@ -52,12 +52,13 @@ class Tiler(
 
         println("#${input.features.size} features importing starts")
         input.features.forEachIndexed { i, f ->
+            var endLog = marker.startLogDuration("prepare geometry")
             val id = if (f.properties.containsKey("id")) (f.properties["id"] as Value.StringValue).value else UUID.randomUUID().toString()
             val bound = q.bind()
                     .setString(0, id)
                     .setString(1, f.geometry.toWKT())
-
-            val endLog = marker.startLogDuration("store geometry to database")
+            endLog()
+            endLog = marker.startLogDuration("store geometry to database")
             session.execute(bound)
             endLog()
             if (i % 1000 == 0) println("#$i features stored to DB")
