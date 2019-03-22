@@ -48,7 +48,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val buffer = environment.config.propertyOrNull("ktor.application.buffer")?.getString()?.toInt() ?: 64
         val dbHosts = environment.config.propertyOrNull("ktor.application.db_hosts")?.getString()?.split(",")?.map { it.trim() } ?: listOf("localhost")
         val dbStrategy = environment.config.propertyOrNull("ktor.application.db_strategy")?.getString() ?: "SimpleStrategy"
-        val dbReplFactor = environment.config.propertyOrNull("ktor.application.replication_factor")?.getInt() ?: 1
+        val dbReplFactor = environment.config.propertyOrNull("ktor.application.replication_factor")?.getString()?.toInt() ?: 1
  
         val clusterBuilder = Cluster.builder().apply {
             dbHosts.forEach {
@@ -243,7 +243,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 "WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : $r };")
         session.execute("USE geo;")
         session.execute("CREATE TABLE geo.features (    timestamp timestamp,    id text,    geometry text,    PRIMARY KEY (timestamp, id));")
-        session.execute("CREATE CUSTOM INDEX test_idx ON geo.features (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{fields: { geometry: {type: "geo_shape", max_levels: 3, transformations: [{type: "bbox"}]}}}'};")
+        session.execute("CREATE CUSTOM INDEX test_idx ON geo.features (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{fields: { geometry: {type: 'geo_shape', max_levels: 3, transformations: [{type: 'bbox'}]}}}'};")
         session.close()
         cluster.close()
         return true
