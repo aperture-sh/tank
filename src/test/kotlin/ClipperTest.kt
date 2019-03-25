@@ -24,7 +24,7 @@ class ClipperTest {
     private fun readFeature(type: String, fileName: String) =
             JSON.plain.parse<Feature>(javaClass.getResource("fixtures/$type/$fileName.json").readText())
 
-    @Test
+//    @Test
     fun test1() {
         val cluster = Cluster.builder().addContactPoint("127.0.0.1").build()
         val session = cluster.connect("geo")
