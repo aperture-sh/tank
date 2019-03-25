@@ -11,20 +11,29 @@
         </encoder>
     </appender>
     <appender name="BENCHMARK_FILE" class="ch.qos.logback.core.FileAppender">
+        <filter class="io.marauder.tank">
+            <level>DEBUG</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
         <file>${LOG_PATH:-./logs}/benchmark.log</file>
         <encoder>
             <pattern>%d{YYYY-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <root level="INFO">
+    <root level="INFO" additivity="false">
         <appender-ref ref="STDOUT"/>
         <appender-ref ref="FILE"/>
     </root>
     <logger name="io.ktor.application.Application" level="INFO" additivity="false">
         <appender-ref ref="BENCHMARK_FILE"/>
     </logger>
-    <logger name="io.marauder.tank" level="INFO" additivity="false">
+    <logger name="tank_info" level="INFO" additivity="false">
+        <appender-ref ref="FILE"/>
+        <appender-ref ref="STDOUT"/>
+    </logger>
+    <logger name="tank_debug" level="DEBUG" additivity="false">
         <appender-ref ref="BENCHMARK_FILE"/>
     </logger>
     <logger name="org.eclipse.jetty" level="INFO"/>
