@@ -50,7 +50,7 @@ class Tiler(
 
 //        val merged = FeatureCollection(features = left.features + right.features + center.features)
 
-        println("#${input.features.size} features importing starts")
+        log.info("#${input.features.size} features importing starts")
         input.features.forEachIndexed { i, f ->
             var endLog = marker.startLogDuration("prepare geometry")
             val id = if (f.properties.containsKey("id")) (f.properties["id"] as Value.StringValue).value else UUID.randomUUID().toString()
@@ -61,7 +61,7 @@ class Tiler(
             endLog = marker.startLogDuration("store geometry to database")
             session.execute(bound)
             endLog()
-            if (i % 1000 == 0) println("#$i features stored to DB")
+            if (i % 1000 == 0) log.info("#$i features stored to DB")
         }
 
             /*(minZoom..maxZoom).forEach { zoomLvL ->
@@ -70,7 +70,7 @@ class Tiler(
 
             }*/
 
-        println("#${input.features.size} features importing finished")
+        log.info("#${input.features.size} features importing finished")
     }
 
     @ImplicitReflectionSerializer
@@ -135,7 +135,8 @@ class Tiler(
     }
 
     companion object {
-        private val marker = Benchmark(LoggerFactory.getLogger(Tiler::class.java))
+        private val log = LoggerFactory.getLogger(Tiler::class.java)
+        private val marker = Benchmark(log)
     }
 
 }
