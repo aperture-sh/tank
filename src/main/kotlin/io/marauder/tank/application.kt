@@ -242,8 +242,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         session.execute("CREATE  KEYSPACE IF NOT EXISTS geo " +
                 "WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : $r };")
         session.execute("USE geo;")
-        session.execute("CREATE TABLE geo.features (    timestamp timestamp,    id text,    geometry text,    PRIMARY KEY (timestamp, id));")
-        session.execute("CREATE CUSTOM INDEX test_idx ON geo.features (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{fields: { geometry: {type: \"geo_shape\", max_levels: 3, transformations: [{type: \"bbox\"}]}}}'}")
+        session.execute("CREATE TABLE IF NOT EXISTS geo.features (    timestamp timestamp,    id text,    geometry text,    PRIMARY KEY (timestamp, id));")
+        session.execute("CREATE CUSTOM INDEX IF NOT EXISTS test_idx ON geo.features (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{fields: { geometry: {type: \"geo_shape\", max_levels: 3, transformations: [{type: \"bbox\"}]}}}'}")
         session.close()
         cluster.close()
         return true
