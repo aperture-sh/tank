@@ -1,5 +1,6 @@
 package io.marauder.tank
 
+import com.datastax.driver.core.LocalDate
 import com.datastax.driver.core.Session
 import io.marauder.supercharged.Clipper
 import io.marauder.supercharged.Encoder
@@ -31,7 +32,7 @@ class Tiler(
     private val intersector = Intersector()
     private val clipper = Clipper()
 //    private val q = session.prepare("INSERT INTO features (z,x,y,id,geometry) VALUES (?, ?, ?, ?, ?)")
-    private val q = session.prepare("INSERT INTO features (timestamp,id,geometry) VALUES (toUnixTimestamp(now()), ?, ?)")
+    private val q = session.prepare("INSERT INTO features (img_date,vector_id,crop_descr,geometry) VALUES (?, ?, ?, ?)")
 
 
     @ImplicitReflectionSerializer
@@ -53,10 +54,14 @@ class Tiler(
         log.info("#${input.features.size} features importing starts")
         input.features.forEachIndexed { i, f ->
             var endLog = marker.startLogDuration("prepare geometry")
-            val id = if (f.properties.containsKey("id")) (f.properties["id"] as Value.StringValue).value else UUID.randomUUID().toString()
+            val id = if (f.properties.containsKey("vector_id")) (f.properties["vector_id"] as Value.IntValue).value else 0
+            val img_date = (if (f.properties.containsKey("img_date")) (f.properties["img_date"] as Value.StringValue).value else "2016-08-05").toString().split('-')
+
             val bound = q.bind()
-                    .setString(0, id)
-                    .setString(1, f.geometry.toWKT())
+                    .setDate(0, LocalDate.fromYearMonthDay(img_date[0].toInt(), img_date[1].toInt(), img_date[2].toInt()))
+                    .setInt(1, id.toInt())
+                    .setString(2, (f.properties["crop_descr"] as Value.StringValue).value)
+                    .setString(3, f.geometry.toWKT())
             endLog()
             endLog = marker.startLogDuration("store geometry to database")
             session.execute(bound)

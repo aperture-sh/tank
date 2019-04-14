@@ -31,9 +31,9 @@ import kotlinx.serialization.parseList
 import org.slf4j.LoggerFactory
 import vector_tile.VectorTile
 import com.datastax.driver.core.ConsistencyLevel
+import com.datastax.driver.core.LocalDate
 import com.datastax.driver.core.QueryOptions
-
-
+import com.google.gson.Gson
 
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
@@ -85,7 +85,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
 //        val q = session.prepare("SELECT geometry, id FROM features WHERE z=? AND x=? AND y=?;")
 
-        val query = """SELECT geometry, id FROM features WHERE expr(test_idx, ?);""".trimMargin()
+        val query = """SELECT geometry, vector_id, img_date, crop_descr FROM features WHERE img_date = ? AND expr(geo_idx, ?);""".trimMargin()
 
         println(query)
 
@@ -155,6 +155,13 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 val x = call.parameters["x"]?.toInt()?:-1
                 val y = call.parameters["y"]?.toInt()?:-1
 
+                val gson = Gson()
+                val filters = gson.fromJson<Map<String,Any>>(call.parameters["filters"]?:"{}", Map::class.java)
+
+                val img_date = (filters["img_date"] ?: "2016-08-05").toString().split('-')
+
+
+
                 val box = projector.tileBBox(z, x, y)
 //                println(box)
 
@@ -183,7 +190,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 //                println(jsonQuery)
 
                 val bound = q.bind()
-                        .setString(0, jsonQuery)
+                        .setString(1, jsonQuery)
+                        .setDate(0, LocalDate.fromYearMonthDay(img_date[0].toInt(), img_date[1].toInt(), img_date[2].toInt()))
 
                 endLog()
 
@@ -197,7 +205,12 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 //                    println(row.getString(1))
                     Feature(
                             geometry = Geometry.fromWKT(row.getString(0))!!,
-                            properties = mapOf("id" to Value.StringValue(row.getString(1)))
+                            properties = mapOf(
+                                    "vector_id" to Value.IntValue(row.getInt(1).toLong()),
+                                    "img_date" to Value.StringValue(row.getDate(2).toString()),
+                                    "crop_descr" to Value.StringValue(row.getString(3))
+                            ),
+                            id = row.getInt(1).toString()
                     )
 
                 }
@@ -256,8 +269,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         }
 
         session.execute("USE geo;")
-        session.execute("CREATE TABLE IF NOT EXISTS geo.features (    timestamp timestamp,    id text,    geometry text,    PRIMARY KEY (timestamp, id));")
-        session.execute("CREATE CUSTOM INDEX IF NOT EXISTS test_idx ON geo.features (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{fields: { geometry: {type: \"geo_shape\", max_levels: 3, transformations: [{type: \"bbox\"}]}}}'}")
+        session.execute("CREATE TABLE IF NOT EXISTS geo.features (img_date date, vector_id int, crop_descr text, geometry text, PRIMARY KEY (img_date, vector_id));")
+        session.execute("CREATE CUSTOM INDEX IF NOT EXISTS geo_idx ON geo.features (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{fields: { geometry: {type: \"geo_shape\", max_levels: 3, transformations: [{type: \"bbox\"}]}}}'}")
         session.close()
         cluster.close()
         return true
