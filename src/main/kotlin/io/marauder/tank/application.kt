@@ -1,6 +1,7 @@
 package io.marauder.tank
 
 import com.datastax.driver.core.Cluster
+import com.datastax.driver.core.policies.RoundRobinPolicy
 import io.ktor.application.*
 import io.ktor.response.*
 import io.ktor.request.*
@@ -29,6 +30,10 @@ import kotlinx.serialization.parse
 import kotlinx.serialization.parseList
 import org.slf4j.LoggerFactory
 import vector_tile.VectorTile
+import com.datastax.driver.core.ConsistencyLevel
+import com.datastax.driver.core.QueryOptions
+
+
 
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
@@ -49,11 +54,14 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val dbHosts = environment.config.propertyOrNull("ktor.application.db_hosts")?.getString()?.split(",")?.map { it.trim() } ?: listOf("localhost")
         val dbStrategy = environment.config.propertyOrNull("ktor.application.db_strategy")?.getString() ?: "SimpleStrategy"
         val dbReplFactor = environment.config.propertyOrNull("ktor.application.replication_factor")?.getString()?.toInt() ?: 1
- 
+
+        val qo = QueryOptions().setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
         val clusterBuilder = Cluster.builder().apply {
             dbHosts.forEach {
                 addContactPoint(it)
             }
+            withLoadBalancingPolicy(RoundRobinPolicy())
+            withQueryOptions(qo)
         }
 
         var isConnected = false
@@ -239,8 +247,14 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
     private fun initCassandra(clusterBuilder: Cluster.Builder, s: String, r: Int): Boolean {
         val cluster = clusterBuilder.build()
         val session = cluster.connect()
-        session.execute("CREATE  KEYSPACE IF NOT EXISTS geo " +
-                "WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : $r };")
+        if (s == "SimpleStrategy") {
+            session.execute("CREATE  KEYSPACE IF NOT EXISTS geo " +
+                    "WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : $r };")
+        } else {
+            session.execute("CREATE  KEYSPACE IF NOT EXISTS geo " +
+                    "WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'DC1' : $r};")
+        }
+
         session.execute("USE geo;")
         session.execute("CREATE TABLE IF NOT EXISTS geo.features (    timestamp timestamp,    id text,    geometry text,    PRIMARY KEY (timestamp, id));")
         session.execute("CREATE CUSTOM INDEX IF NOT EXISTS test_idx ON geo.features (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{fields: { geometry: {type: \"geo_shape\", max_levels: 3, transformations: [{type: \"bbox\"}]}}}'}")
