@@ -156,14 +156,12 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 val y = call.parameters["y"]?.toInt()?:-1
 
                 val gson = Gson()
-                val filters = gson.fromJson<Map<String,Any>>(call.parameters["filters"]?:"{}", Map::class.java)
+                val filters = gson.fromJson<Map<String,Any>>(call.parameters["filter"]?:"{}", Map::class.java)
 
                 val img_date = (filters["img_date"] ?: "2016-08-05").toString().split('-')
-
-
+                log.info(call.parameters["filter"])
 
                 val box = projector.tileBBox(z, x, y)
-//                println(box)
 
                 val poly = Geometry.Polygon(coordinates = listOf(listOf(
                         listOf(box[0], box[1]),
