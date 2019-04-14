@@ -263,7 +263,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     "WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : $r };")
         } else {
             session.execute("CREATE  KEYSPACE IF NOT EXISTS geo " +
-                    "WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'DC1' : $r};")
+                    "WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'datacenter1' : $r};")
         }
 
         session.execute("USE geo;")
