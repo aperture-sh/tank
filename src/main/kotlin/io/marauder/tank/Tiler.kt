@@ -32,7 +32,7 @@ class Tiler(
     private val intersector = Intersector()
     private val clipper = Clipper()
 //    private val q = session.prepare("INSERT INTO features (z,x,y,id,geometry) VALUES (?, ?, ?, ?, ?)")
-    private val q = session.prepare("INSERT INTO features (img_date,vector_id,crop_descr,geometry) VALUES (?, ?, ?, ?)")
+    private val q = session.prepare("INSERT INTO features (img_date,vector_id,variety_code,crop_descr,geometry) VALUES (?, ?, ?, ?, ?)")
 
 
     @ImplicitReflectionSerializer
@@ -61,7 +61,8 @@ class Tiler(
                     .setDate(0, LocalDate.fromYearMonthDay(img_date[0].toInt(), img_date[1].toInt(), img_date[2].toInt()))
                     .setInt(1, id.toInt())
                     .setString(2, (f.properties["crop_descr"] as Value.StringValue).value)
-                    .setString(3, f.geometry.toWKT())
+                    .setInt(3, (f.properties["variety_code"] as Value.IntValue).value.toInt())
+                    .setString(4, f.geometry.toWKT())
             endLog()
             endLog = marker.startLogDuration("store geometry to database")
             session.execute(bound)

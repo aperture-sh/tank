@@ -85,7 +85,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
 //        val q = session.prepare("SELECT geometry, id FROM features WHERE z=? AND x=? AND y=?;")
 
-        val query = """SELECT geometry, vector_id, img_date, crop_descr FROM features WHERE img_date = ? AND expr(geo_idx, ?);""".trimMargin()
+        val query = """SELECT geometry, vector_id, img_date, variety_code, crop_descr FROM features WHERE img_date = ? AND expr(geo_idx, ?);""".trimMargin()
 
         println(query)
 
@@ -206,7 +206,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                             properties = mapOf(
                                     "vector_id" to Value.IntValue(row.getInt(1).toLong()),
                                     "img_date" to Value.StringValue(row.getDate(2).toString()),
-                                    "crop_descr" to Value.StringValue(row.getString(3))
+                                    "variety_code" to Value.StringValue(row.getString(3)),
+                                    "crop_descr" to Value.StringValue(row.getString(4))
                             ),
                             id = row.getInt(1).toString()
                     )
@@ -267,7 +268,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         }
 
         session.execute("USE geo;")
-        session.execute("CREATE TABLE IF NOT EXISTS geo.features (img_date date, vector_id int, crop_descr text, geometry text, PRIMARY KEY (img_date, vector_id));")
+        session.execute("CREATE TABLE IF NOT EXISTS geo.features (img_date date, vector_id int, variet_code int, crop_descr text, geometry text, PRIMARY KEY (img_date, vector_id));")
         session.execute("CREATE CUSTOM INDEX IF NOT EXISTS geo_idx ON geo.features (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{fields: { geometry: {type: \"geo_shape\", max_levels: 3, transformations: [{type: \"bbox\"}]}}}'}")
         session.close()
         cluster.close()
