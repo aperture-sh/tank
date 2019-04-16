@@ -206,7 +206,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                             properties = mapOf(
                                     "vector_id" to Value.IntValue(row.getInt(1).toLong()),
                                     "img_date" to Value.StringValue(row.getDate(2).toString()),
-                                    "variety_code" to Value.StringValue(row.getString(3)),
+                                    "variety_code" to Value.IntValue(row.getInt(3).toLong()),
                                     "crop_descr" to Value.StringValue(row.getString(4))
                             ),
                             id = row.getInt(1).toString()
