@@ -6,33 +6,30 @@ import io.marauder.supercharged.Clipper
 import io.marauder.supercharged.Encoder
 import io.marauder.supercharged.Intersector
 import io.marauder.supercharged.Projector
-import io.marauder.supercharged.models.Feature
 import io.marauder.supercharged.models.GeoJSON
 import io.marauder.supercharged.models.Tile
 import io.marauder.supercharged.models.Value
-import io.marauder.tank.Benchmark
-import kotlinx.coroutines.*
 import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlinx.serialization.json.JSON
 import kotlinx.serialization.stringify
 import org.slf4j.LoggerFactory
-import java.nio.Buffer
 import java.nio.ByteBuffer
 import java.util.UUID
 import kotlin.math.pow
 
-class Tiler(
+class Tyler(
         private val session: Session,
         private val minZoom: Int = 2,
         private val maxZoom: Int = 15,
         private val extend: Int = 4096,
-        private val buffer: Int = 64) {
+        private val buffer: Int = 64,
+        private val dbTable: String = "features") {
 
     private val projector = Projector(extend)
     private val intersector = Intersector()
     private val clipper = Clipper()
 //    private val q = session.prepare("INSERT INTO features (z,x,y,id,geometry) VALUES (?, ?, ?, ?, ?)")
-    private val q = session.prepare("INSERT INTO features (img_date,vector_id,variety_code,crop_descr,geometry) VALUES (?, ?, ?, ?, ?)")
+    private val q = session.prepare("INSERT INTO $dbTable (img_date,vector_id,variety_code,crop_descr,geometry) VALUES (?, ?, ?, ?, ?)")
 
 
     @ImplicitReflectionSerializer
@@ -141,7 +138,7 @@ class Tiler(
     }
 
     companion object {
-        private val log = LoggerFactory.getLogger(Tiler::class.java)
+        private val log = LoggerFactory.getLogger(Tyler::class.java)
         private val marker = Benchmark(log)
     }
 

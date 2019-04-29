@@ -49,6 +49,5 @@ The `TANK_DB_HOSTS` variable is a comma-separated host list
 ### REST API
 
 `GET /` - Print Tank info message  
-`POST /` - Import GeoJSON features line separated  
-`POST /file` -  Import GeoJSON feature collection as one file  
+`POST /:layer?` accepts GeoJSON features separated by line to import, `geojson=true` indicates to import a GeoJSON file, features will be imported to given `layer` or the base layer  
 `GET /z/x/y` - Request a complete tile

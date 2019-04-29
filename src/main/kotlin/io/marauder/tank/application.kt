@@ -13,12 +13,10 @@ import java.time.*
 import io.ktor.http.content.resources
 import io.ktor.http.content.static
 import io.ktor.util.InternalAPI
-import io.ktor.util.decodeString
 import io.marauder.supercharged.Clipper
 import io.marauder.supercharged.Encoder
 import io.marauder.supercharged.Projector
 import io.marauder.supercharged.models.*
-import io.marauder.tank.Tiler
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -27,9 +25,7 @@ import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlinx.serialization.json.JSON
 import kotlinx.serialization.json.JsonParsingException
 import kotlinx.serialization.parse
-import kotlinx.serialization.parseList
 import org.slf4j.LoggerFactory
-import vector_tile.VectorTile
 import com.datastax.driver.core.ConsistencyLevel
 import com.datastax.driver.core.LocalDate
 import com.datastax.driver.core.QueryOptions
@@ -52,7 +48,10 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val attrFields = environment.config.propertyOrNull("ktor.application.attr_field")?.getList() ?: emptyList()
         val buffer = environment.config.propertyOrNull("ktor.application.buffer")?.getString()?.toInt() ?: 64
         val dbHosts = environment.config.propertyOrNull("ktor.application.db_hosts")?.getString()?.split(",")?.map { it.trim() } ?: listOf("localhost")
+        val dbDatacenter = environment.config.propertyOrNull("ktor.application.db_datacenter")?.getString() ?: "datacenter1"
         val dbStrategy = environment.config.propertyOrNull("ktor.application.db_strategy")?.getString() ?: "SimpleStrategy"
+        val dbKeyspace = environment.config.propertyOrNull("ktor.application.db_keyspace")?.getString() ?: "geo"
+        val dbTable = environment.config.propertyOrNull("ktor.application.db_table")?.getString() ?: "features"
         val dbReplFactor = environment.config.propertyOrNull("ktor.application.replication_factor")?.getString()?.toInt() ?: 1
 
         val qo = QueryOptions().setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
@@ -68,7 +67,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         var attempts = 10
         while (!isConnected && attempts >= 0) {
             try {
-                initCassandra(clusterBuilder, dbStrategy, dbReplFactor)
+                initCassandra(clusterBuilder, dbStrategy, dbReplFactor, dbKeyspace, dbTable, dbDatacenter)
                 isConnected = true
             } catch (e: RuntimeException) {
                 attempts--
@@ -80,14 +79,12 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         val cluster = clusterBuilder.build()
         val session = cluster.connect("geo")
-        val tiler = Tiler(session, minZoom, maxZoom, extend, buffer)
+        val tiler = Tyler(session, minZoom, maxZoom, extend, buffer, dbTable)
         val projector = Projector()
 
 //        val q = session.prepare("SELECT geometry, id FROM features WHERE z=? AND x=? AND y=?;")
 
-        val query = """SELECT geometry, vector_id, img_date, variety_code, crop_descr FROM features WHERE img_date = ? AND expr(geo_idx, ?);""".trimMargin()
-
-        println(query)
+        val query = """SELECT geometry, vector_id, img_date, variety_code, crop_descr FROM $dbTable WHERE img_date = ? AND expr(geo_idx, ?);""".trimMargin()
 
         val q = session.prepare(query)
 
@@ -123,29 +120,31 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 call.respondText("Tank Tyle Database is running")
             }
 
-            post("/file") {
-                val geojson = JSON.plain.parse<GeoJSON>(call.receiveText())
-                GlobalScope.launch {
-                    val neu = projector.projectFeatures(geojson)
-                    tiler.tiler(neu)
+            post("/{layer?}") {
+                val importLayer = call.parameters["layer"] ?: ""
+                if (baseLayer == "" && importLayer == "") {
+                    call.respondText("Import layer must not be an empty string", status = HttpStatusCode.BadRequest)
+                } else {
+                    val layer = "$baseLayer${if (baseLayer != "" && importLayer != "") "." else ""}$importLayer"
+                    if (call.parameters["geojson"] == "true") {
+                        val input = JSON.plain.parse<GeoJSON>(call.receiveText())
+                        GlobalScope.launch {
+                            tiler.tiler(projector.projectFeatures(input))
+                        }
+                    } else {
+                        val features = mutableListOf<Feature>()
+                        call.receiveStream().bufferedReader().useLines { lines ->
+                            lines.forEach { features.add(JSON.plain.parse(it)) }
+                        }
+                        val geojson = GeoJSON(features = features)
+                        GlobalScope.launch {
+                            val neu = projector.projectFeatures(geojson)
+                            tiler.tiler(neu)
+                        }
+                    }
+
+                    call.respondText("Features Accepted", contentType = ContentType.Text.Plain, status = HttpStatusCode.Accepted)
                 }
-
-
-                call.respondText("Features Accepted", contentType = ContentType.Text.Plain, status = HttpStatusCode.Accepted)
-            }
-
-            post("/") {
-                val features = mutableListOf<Feature>()
-                call.receiveStream().bufferedReader().useLines { lines ->
-                    lines.forEach { features.add(JSON.plain.parse(it)) }
-                }
-                val geojson = GeoJSON(features = features)
-                GlobalScope.launch {
-                    val neu = projector.projectFeatures(geojson)
-                    tiler.tiler(neu)
-                }
-
-                call.respondText("Features Accepted", contentType = ContentType.Text.Plain, status = HttpStatusCode.Accepted)
             }
 
             get("/tile/{z}/{x}/{y}") {
@@ -256,20 +255,20 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         }
     }
 
-    private fun initCassandra(clusterBuilder: Cluster.Builder, s: String, r: Int): Boolean {
+    private fun initCassandra(clusterBuilder: Cluster.Builder, strategy: String, replication: Int, keyspace: String, table: String, datacenter: String): Boolean {
         val cluster = clusterBuilder.build()
         val session = cluster.connect()
-        if (s == "SimpleStrategy") {
-            session.execute("CREATE  KEYSPACE IF NOT EXISTS geo " +
-                    "WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : $r };")
+        if (strategy == "SimpleStrategy") {
+            session.execute("CREATE  KEYSPACE IF NOT EXISTS $keyspace " +
+                    "WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : $replication };")
         } else {
-            session.execute("CREATE  KEYSPACE IF NOT EXISTS geo " +
-                    "WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'datacenter1' : $r};")
+            session.execute("CREATE  KEYSPACE IF NOT EXISTS $keyspace " +
+                    "WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', '$datacenter' : $replication};")
         }
 
-        session.execute("USE geo;")
-        session.execute("CREATE TABLE IF NOT EXISTS geo.features (img_date date, vector_id int, variet_code int, crop_descr text, geometry text, PRIMARY KEY (img_date, vector_id));")
-        session.execute("CREATE CUSTOM INDEX IF NOT EXISTS geo_idx ON geo.features (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{fields: { geometry: {type: \"geo_shape\", max_levels: 3, transformations: [{type: \"bbox\"}]}}}'}")
+        session.execute("USE $keyspace;")
+        session.execute("CREATE TABLE IF NOT EXISTS $keyspace.$table (img_date date, vector_id int, variet_code int, crop_descr text, geometry text, PRIMARY KEY (img_date, vector_id));")
+        session.execute("CREATE CUSTOM INDEX IF NOT EXISTS geo_idx ON $keyspace.$table (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{fields: { geometry: {type: \"geo_shape\", max_levels: 3, transformations: [{type: \"bbox\"}]}}}'}")
         session.close()
         cluster.close()
         return true
