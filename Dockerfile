@@ -24,6 +24,6 @@ COPY --from=build /build/resources/application.conf /app/application.conf
 COPY --from=build /build/scripts/start.sh /app/start.sh
 WORKDIR /app
 
-ENTRYPOINT ./start.sh
+ENTRYPOINT ["./start.sh"]
 
 CMD ["-config=/app/application.conf"]
