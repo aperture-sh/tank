@@ -35,6 +35,7 @@ import io.ktor.util.KtorExperimentalAPI
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
+
     @KtorExperimentalAPI
     @InternalAPI
     @ImplicitReflectionSerializer
@@ -45,14 +46,23 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val baseLayer = environment.config.propertyOrNull("ktor.application.tyler.base_layer")?.getString()
                 ?: "io.marauder.tank"
         val extend = environment.config.propertyOrNull("ktor.application.tyler.extend")?.getString()?.toInt() ?: 4096
-        val attrFields = environment.config.propertyOrNull("ktor.application.attr_field")?.getList() ?: emptyList()
+        val mainAttr = environment.config.propertyOrNull("ktor.application.tyler.main_attr")?.getString() ?: ""
+        val attributes = environment.config.propertyOrNull("ktor.application.tyler.attributes")?.getString()?.split(",")?.map { it.trim() } ?: listOf()
         val buffer = environment.config.propertyOrNull("ktor.application.tyler.buffer")?.getString()?.toInt() ?: 64
+
         val dbHosts = environment.config.propertyOrNull("ktor.application.db.hosts")?.getString()?.split(",")?.map { it.trim() } ?: listOf("localhost")
         val dbDatacenter = environment.config.propertyOrNull("ktor.application.db.datacenter")?.getString() ?: "datacenter1"
         val dbStrategy = environment.config.propertyOrNull("ktor.application.db.strategy")?.getString() ?: "SimpleStrategy"
         val dbKeyspace = environment.config.propertyOrNull("ktor.application.db.keyspace")?.getString() ?: "geo"
         val dbTable = environment.config.propertyOrNull("ktor.application.db.table")?.getString() ?: "features"
         val dbReplFactor = environment.config.propertyOrNull("ktor.application.db.replication_factor")?.getString()?.toInt() ?: 1
+
+        val partitionKeys = environment.config.propertyOrNull("ktor.application.data.partition_keys")?.getString()?.let { if (it == "") null else it }?.split(",")?.map { it.trim() } ?: listOf("timestamp")
+        val primaryKeys = environment.config.propertyOrNull("ktor.application.data.primary_keys")?.getString()?.let { if (it == "") null else it }?.split(",")?.map { it.trim() } ?: listOf()
+        val attrFields = environment.config.propertyOrNull("ktor.application.data.attr_fields")?.getString()?.let { if (it == "") null else it }?.split(",")?.map { it.trim() } ?: listOf("timestamp")
+        val addTimeStamp = environment.config.propertyOrNull("ktor.application.data.add_timestamp")?.getString()?.let { it == "true" } ?: true
+
+
 
         val qo = QueryOptions().setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
         val clusterBuilder = Cluster.builder().apply {
@@ -67,9 +77,10 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         var attempts = 10
         while (!isConnected && attempts >= 0) {
             try {
-                initCassandra(clusterBuilder, dbStrategy, dbReplFactor, dbKeyspace, dbTable, dbDatacenter)
+                initCassandra(clusterBuilder, dbStrategy, dbReplFactor, dbKeyspace, dbTable, dbDatacenter, partitionKeys, primaryKeys, attrFields)
                 isConnected = true
             } catch (e: RuntimeException) {
+                println(e.cause)
                 attempts--
                 runBlocking {
                     delay(3_000)
@@ -79,13 +90,16 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         val cluster = clusterBuilder.build()
         val session = cluster.connect(dbKeyspace)
-        val tiler = Tyler(session, extend, buffer, dbTable)
+        val tiler = Tyler(session, dbTable, addTimeStamp, attrFields)
         val projector = Projector()
 
-        val query = """SELECT geometry, vector_id, img_date, variety_code, crop_descr FROM $dbTable WHERE img_date = ? AND expr(geo_idx, ?);""".trimMargin()
+        val query = """
+            | SELECT geometry${if (attributes.isNotEmpty()) attributes.joinToString(",", ",") else "" }
+            | FROM $dbTable
+            | WHERE ${ if (mainAttr != "") "$mainAttr = ? AND" else "" } expr(geo_idx, ?);
+            | """.trimMargin()
 
         val q = session.prepare(query)
-
 
         install(Compression) {
             gzip {
@@ -127,7 +141,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     if (call.parameters["geojson"] == "true") {
                         val input = JSON.plain.parse<GeoJSON>(call.receiveText())
                         GlobalScope.launch {
-                            tiler.tiler(projector.projectFeatures(input))
+                            tiler.import(projector.projectFeatures(input))
                         }
                     } else {
                         val features = mutableListOf<Feature>()
@@ -137,7 +151,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                         val geojson = GeoJSON(features = features)
                         GlobalScope.launch {
                             val neu = projector.projectFeatures(geojson)
-                            tiler.tiler(neu)
+                            tiler.import(neu)
                         }
                     }
 
@@ -156,7 +170,6 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 val filters = gson.fromJson<Map<String,Any>>(call.parameters["filter"]?:"{}", Map::class.java)
 
                 val img_date = (filters["img_date"] ?: "2016-08-05").toString().split('-')
-                log.info(call.parameters["filter"])
 
                 val box = projector.tileBBox(z, x, y)
 
@@ -182,8 +195,6 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     }
                 """.trimIndent()
 
-//                println(jsonQuery)
-
                 val bound = q.bind()
                         .setString(1, jsonQuery)
                         .setDate(0, LocalDate.fromYearMonthDay(img_date[0].toInt(), img_date[1].toInt(), img_date[2].toInt()))
@@ -197,16 +208,20 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
                 endLog = marker.startLogDuration("fetch features")
                 val features = res.map { row ->
-//                    println(row.getString(1))
+                    val attrMap = attrFields.map { attr ->
+                        val (name, type) = attr.split(" ")
+                        when (type) {
+                            "int" -> name to Value.IntValue(row.getInt(name).toLong())
+                            "date" -> name to Value.StringValue(row.getDate(name).toString())
+                            "text" -> name to Value.StringValue(row.getString(name).toString())
+                            else -> TODO("type not supported yet")
+                        }
+                    }.toMap()
+
                     Feature(
-                            geometry = Geometry.fromWKT(row.getString(0))!!,
-                            properties = mapOf(
-                                    "vector_id" to Value.IntValue(row.getInt(1).toLong()),
-                                    "img_date" to Value.StringValue(row.getDate(2).toString()),
-                                    "variety_code" to Value.IntValue(row.getInt(3).toLong()),
-                                    "crop_descr" to Value.StringValue(row.getString(4))
-                            ),
-                            id = row.getInt(1).toString()
+                            geometry = Geometry.fromWKT(row.getString("geometry"))!!,
+                            properties = attrMap,
+                            id = "0"
                     )
 
                 }
@@ -253,7 +268,17 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         }
     }
 
-    private fun initCassandra(clusterBuilder: Cluster.Builder, strategy: String, replication: Int, keyspace: String, table: String, datacenter: String): Boolean {
+    private fun initCassandra(
+            clusterBuilder: Cluster.Builder,
+            strategy: String,
+            replication: Int,
+            keyspace: String,
+            table: String,
+            datacenter: String,
+            partitionKeys: List<String>,
+            primaryKeys: List<String>,
+            attributes: List<String>
+    ): Boolean {
         val cluster = clusterBuilder.build()
         val session = cluster.connect()
         if (strategy == "SimpleStrategy") {
@@ -264,9 +289,32 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     "WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', '$datacenter' : $replication};")
         }
 
+        val tableQuery = """
+            |CREATE TABLE IF NOT EXISTS $keyspace.$table
+            | (${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ", ") else ""} geometry text,
+            | PRIMARY KEY ((${partitionKeys.joinToString(", ")}) ${if (primaryKeys.isNotEmpty()) primaryKeys.joinToString(",", ", ") else ""}));
+        """.trimMargin().replace("\n".toRegex(), "")
+
+        val indexQuery = """
+            |CREATE CUSTOM INDEX IF NOT EXISTS geo_idx ON
+            | $keyspace.$table (geometry) USING 'com.stratio.cassandra.lucene.Index'
+            | WITH OPTIONS = {
+            |   'refresh_seconds': '1',
+            |    'schema': '{
+            |       fields: {
+            |           geometry: {
+            |               type: "geo_shape",
+            |               max_levels: 3,
+            |               transformations: [{type: "bbox"}]
+            |           }
+            |        }
+            |     }'
+            |};
+        """.trimMargin().replace("\n".toRegex(), "")
+
         session.execute("USE $keyspace;")
-        session.execute("CREATE TABLE IF NOT EXISTS $keyspace.$table (img_date date, vector_id int, variet_code int, crop_descr text, geometry text, PRIMARY KEY (img_date, vector_id));")
-        session.execute("CREATE CUSTOM INDEX IF NOT EXISTS geo_idx ON $keyspace.$table (geometry) USING 'com.stratio.cassandra.lucene.Index' WITH OPTIONS = {'refresh_seconds': '1', 'schema': '{fields: { geometry: {type: \"geo_shape\", max_levels: 3, transformations: [{type: \"bbox\"}]}}}'}")
+        session.execute(tableQuery)
+        session.execute(indexQuery)
         session.close()
         cluster.close()
         return true
