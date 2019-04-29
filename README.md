@@ -32,7 +32,7 @@ The `tyler` section describes which attributes are put into the served tile and 
 The `data` section describes which attributes are stored using which type.
 If `add_timestamp` is set to `true`, a timestamp field has to be set (as it is by default). Then the database will store the current time and date in that particular field.
 
-Adding `-conf=resources/application.conf` can be used to specify another configuration file.
+Adding `-config=resources/application.conf` can be used to specify another configuration file.
 
 #### Hints
 
