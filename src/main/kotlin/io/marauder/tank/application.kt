@@ -78,11 +78,9 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         }
 
         val cluster = clusterBuilder.build()
-        val session = cluster.connect("geo")
+        val session = cluster.connect(dbKeyspace)
         val tiler = Tyler(session, extend, buffer, dbTable)
         val projector = Projector()
-
-//        val q = session.prepare("SELECT geometry, id FROM features WHERE z=? AND x=? AND y=?;")
 
         val query = """SELECT geometry, vector_id, img_date, variety_code, crop_descr FROM $dbTable WHERE img_date = ? AND expr(geo_idx, ?);""".trimMargin()
 
