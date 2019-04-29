@@ -1,6 +1,7 @@
 package io.marauder.tank
 
 import com.datastax.driver.core.Cluster
+import com.datastax.driver.core.policies.RoundRobinPolicy
 import io.ktor.application.*
 import io.ktor.response.*
 import io.ktor.request.*
@@ -12,51 +13,75 @@ import java.time.*
 import io.ktor.http.content.resources
 import io.ktor.http.content.static
 import io.ktor.util.InternalAPI
-import io.ktor.util.decodeString
+import io.marauder.supercharged.Clipper
+import io.marauder.supercharged.Encoder
 import io.marauder.supercharged.Projector
-import io.marauder.supercharged.models.Feature
-import io.marauder.supercharged.models.GeoJSON
-import io.marauder.tank.tiling.Tiler
-import kotlinx.coroutines.*
+import io.marauder.supercharged.models.*
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlinx.serialization.json.JSON
 import kotlinx.serialization.json.JsonParsingException
 import kotlinx.serialization.parse
-import kotlinx.serialization.parseList
 import org.slf4j.LoggerFactory
-import vector_tile.VectorTile
+import com.datastax.driver.core.ConsistencyLevel
+import com.datastax.driver.core.LocalDate
+import com.datastax.driver.core.QueryOptions
+import com.google.gson.Gson
+import io.ktor.util.KtorExperimentalAPI
 
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
+
+    @KtorExperimentalAPI
     @InternalAPI
     @ImplicitReflectionSerializer
     fun Application.module() {
 
         val marker = Benchmark(LoggerFactory.getLogger(this::class.java))
 
-        val minZoom = environment.config.propertyOrNull("ktor.application.min_zoom")?.getString()?.toInt() ?: 2
-        val maxZoom = environment.config.propertyOrNull("ktor.application.max_zoom")?.getString()?.toInt() ?: 15
-        val baseLayer = environment.config.propertyOrNull("ktor.application.base_layer")?.getString()
+        val baseLayer = environment.config.propertyOrNull("ktor.application.tyler.base_layer")?.getString()
                 ?: "io.marauder.tank"
-        val extend = environment.config.propertyOrNull("ktor.application.extend")?.getString()?.toInt() ?: 4096
-        val attrFields = environment.config.propertyOrNull("ktor.application.attr_field")?.getList() ?: emptyList()
-        val buffer = environment.config.propertyOrNull("ktor.application.buffer")?.getString()?.toInt() ?: 64
-        val dbHosts = environment.config.propertyOrNull("ktor.application.db_hosts")?.getString()?.split(",")?.map { it.trim() } ?: listOf("localhost")
+        val extend = environment.config.propertyOrNull("ktor.application.tyler.extend")?.getString()?.toInt() ?: 4096
+        val mainAttr = environment.config.propertyOrNull("ktor.application.tyler.main_attr")?.getString() ?: ""
+        val mainAttrDefault = environment.config.propertyOrNull("ktor.application.tyler.main_attr_default")?.getString() ?: ""
+        val attributes = environment.config.propertyOrNull("ktor.application.tyler.attributes")?.getString()?.let { if (it == "") null else it }?.split(",")?.map { it.trim() } ?: listOf()
+        val buffer = environment.config.propertyOrNull("ktor.application.tyler.buffer")?.getString()?.toInt() ?: 64
 
+        val dbHosts = environment.config.propertyOrNull("ktor.application.db.hosts")?.getString()?.split(",")?.map { it.trim() } ?: listOf("localhost")
+        val dbDatacenter = environment.config.propertyOrNull("ktor.application.db.datacenter")?.getString() ?: "datacenter1"
+        val dbStrategy = environment.config.propertyOrNull("ktor.application.db.strategy")?.getString() ?: "SimpleStrategy"
+        val dbKeyspace = environment.config.propertyOrNull("ktor.application.db.keyspace")?.getString() ?: "geo"
+        val dbTable = environment.config.propertyOrNull("ktor.application.db.table")?.getString() ?: "features"
+        val dbReplFactor = environment.config.propertyOrNull("ktor.application.db.replication_factor")?.getString()?.toInt() ?: 1
+
+        val partitionKeys = environment.config.propertyOrNull("ktor.application.data.partition_keys")?.getString()?.let { if (it == "") null else it }?.split(",")?.map { it.trim() } ?: listOf("timestamp")
+        val primaryKeys = environment.config.propertyOrNull("ktor.application.data.primary_keys")?.getString()?.let { if (it == "") null else it }?.split(",")?.map { it.trim() } ?: listOf()
+        val attrFields = environment.config.propertyOrNull("ktor.application.data.attr_fields")?.getString()?.let { if (it == "") null else it }?.split(",")?.map { it.trim() } ?: listOf("timestamp")
+        val addTimeStamp = environment.config.propertyOrNull("ktor.application.data.add_timestamp")?.getString()?.let { it == "true" } ?: true
+
+
+
+        val qo = QueryOptions().setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
         val clusterBuilder = Cluster.builder().apply {
             dbHosts.forEach {
                 addContactPoint(it)
             }
+            withLoadBalancingPolicy(RoundRobinPolicy())
+            withQueryOptions(qo)
         }
 
         var isConnected = false
         var attempts = 10
         while (!isConnected && attempts >= 0) {
             try {
-                initCassandra(clusterBuilder)
+                initCassandra(clusterBuilder, dbStrategy, dbReplFactor, dbKeyspace, dbTable, dbDatacenter, partitionKeys, primaryKeys, attrFields)
                 isConnected = true
             } catch (e: RuntimeException) {
+                println(e.cause)
                 attempts--
                 runBlocking {
                     delay(3_000)
@@ -65,12 +90,17 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         }
 
         val cluster = clusterBuilder.build()
-        val session = cluster.connect("geo")
-        val tiler = Tiler(session, minZoom, maxZoom, extend, buffer)
+        val session = cluster.connect(dbKeyspace)
+        val tiler = Tyler(session, dbTable, addTimeStamp, attrFields)
         val projector = Projector()
 
-        val q = session.prepare("SELECT geometry, id FROM features WHERE z=? AND x=? AND y=?;")
+        val query = """
+            | SELECT geometry${if (attributes.isNotEmpty()) attributes.joinToString(",", ",") else "" }
+            | FROM $dbTable
+            | WHERE ${ if (mainAttr != "") "$mainAttr = :main AND" else "" } expr(geo_idx, :json);
+            | """.trimMargin()
 
+        val q = session.prepare(query)
 
         install(Compression) {
             gzip {
@@ -100,61 +130,146 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         routing {
             get("/") {
-                call.respondText("Tank Tyle Database is running")
+                call.respondText("Tank is running and the endpoints are available")
             }
 
-            post("/file") {
-                val geojson = JSON.plain.parse<GeoJSON>(call.receiveText())
-                GlobalScope.launch {
-                    val neu = projector.projectFeatures(geojson)
-                    tiler.tiler(neu)
+            post("/{layer?}") {
+                val importLayer = call.parameters["layer"] ?: ""
+                if (baseLayer == "" && importLayer == "") {
+                    call.respondText("Import layer must not be an empty string", status = HttpStatusCode.BadRequest)
+                } else {
+                    val layer = "$baseLayer${if (baseLayer != "" && importLayer != "") "." else ""}$importLayer"
+                    if (call.parameters["geojson"] == "true") {
+                        val input = JSON.plain.parse<GeoJSON>(call.receiveText())
+                        GlobalScope.launch {
+                            tiler.import(projector.projectFeatures(input))
+                        }
+                    } else {
+                        val features = mutableListOf<Feature>()
+                        call.receiveStream().bufferedReader().useLines { lines ->
+                            lines.forEach { features.add(JSON.plain.parse(it)) }
+                        }
+                        val geojson = GeoJSON(features = features)
+                        GlobalScope.launch {
+                            val neu = projector.projectFeatures(geojson)
+                            tiler.import(neu)
+                        }
+                    }
+
+                    call.respondText("Features Accepted", contentType = ContentType.Text.Plain, status = HttpStatusCode.Accepted)
                 }
-
-
-                call.respondText("Features Accepted", contentType = ContentType.Text.Plain, status = HttpStatusCode.Accepted)
-            }
-
-            post("/") {
-                val features = mutableListOf<Feature>()
-                call.receiveStream().bufferedReader().useLines { lines ->
-                    lines.forEach { features.add(JSON.plain.parse(it)) }
-                }
-                val geojson = GeoJSON(features = features)
-                GlobalScope.launch {
-                    val neu = projector.projectFeatures(geojson)
-                    tiler.tiler(neu)
-                }
-
-                call.respondText("Features Accepted", contentType = ContentType.Text.Plain, status = HttpStatusCode.Accepted)
             }
 
             get("/tile/{z}/{x}/{y}") {
-                val bound = q.bind()
-                        .setInt(0, call.parameters["z"]?.toInt()?:-1)
-                        .setInt(1, call.parameters["x"]?.toInt()?:-1)
-                        .setInt(2, call.parameters["y"]?.toInt()?:-1)
 
-                var endLog = marker.startLogDuration("CQL statement execution - query={} z={} x={} y={}",
-                        bound.preparedStatement().queryString, bound.getInt(0), bound.getInt(1), bound.getInt(2))
+                var endLog = marker.startLogDuration("prepare query")
+                val z = call.parameters["z"]?.toInt()?:-1
+                val x = call.parameters["x"]?.toInt()?:-1
+                val y = call.parameters["y"]?.toInt()?:-1
+
+                val gson = Gson()
+
+                val typeMap = attrFields.map { attr ->
+                    val (name, type) = attr.split(" ")
+                    name to type
+                }.toMap()
+
+                val filters = gson.fromJson<Map<String,Any>>(call.parameters["filter"]?:"{}", Map::class.java)
+
+                val mainFilter = (filters[mainAttr] ?: mainAttrDefault).toString()
+
+                val box = projector.tileBBox(z, x, y)
+
+                val poly = Geometry.Polygon(coordinates = listOf(listOf(
+                        listOf(box[0], box[1]),
+                        listOf(box[2], box[1]),
+                        listOf(box[2], box[3]),
+                        listOf(box[0], box[3]),
+                        listOf(box[0], box[1])
+                )))
+
+                val jsonQuery = """
+                    {
+                        filter: {
+                         type: "geo_shape",
+                         field: "geometry",
+                         operation: "intersects",
+                         shape: {
+                            type: "wkt",
+                            value: "${projector.projectFeature(Feature(geometry = poly)).geometry.toWKT()}"
+                         }
+                        }
+                    }
+                """.trimIndent()
+
+                val bound = q.bind()
+                        .setString("json", jsonQuery)
+
+                if (mainAttr != "" && mainFilter != "") {
+                    when (typeMap[mainAttr]) {
+                        "int" ->  bound.setInt("main", mainFilter.toInt())
+                        "date" -> {
+                            val date = mainFilter.split("-")
+                            bound.setDate("main", LocalDate.fromYearMonthDay(date[0].toInt(), date[1].toInt(), date[2].toInt()))
+                        }
+                        "text" -> bound.setString("main", mainFilter)
+                        "timestamp" -> TODO("type not supported yet")
+                        else -> TODO("type not supported yet")
+                    }
+                }
+
+                endLog()
+
+                endLog = marker.startLogDuration("CQL statement execution")
                 val res = session.execute(bound)
                 endLog()
-                val layer = vector_tile.VectorTile.Tile.Layer.newBuilder()
-                layer.name = baseLayer
-                layer.version = 2
 
-                endLog = marker.startLogDuration("vector file encoding")
-                res.forEach { row ->
-                    val f = vector_tile.VectorTile.Tile.Feature.newBuilder()
-                    val g = JSON.plain.parseList<Int>(row.getBytes(0).decodeString())
-                    f.type = VectorTile.Tile.GeomType.POLYGON
-                    f.addAllGeometry(g)
-                    layer.addFeatures(f.build())
+
+                endLog = marker.startLogDuration("fetch features")
+                val features = res.map { row ->
+
+                    val attrMap = attributes.map { attr ->
+                        when (typeMap[attr]) {
+                            "int" -> attr to Value.IntValue(row.getInt(attr).toLong())
+                            "date" -> attr to Value.StringValue(row.getDate(attr).toString())
+                            "text" -> attr to Value.StringValue(row.getString(attr).toString())
+                            "timestamp" -> TODO("type not supported yet")
+                            else -> TODO("type not supported yet")
+                        }
+                    }.toMap()
+
+                    Feature(
+                            geometry = Geometry.fromWKT(row.getString("geometry"))!!,
+                            properties = attrMap,
+                            id = "0"
+                    )
+
                 }
-                val tile = vector_tile.VectorTile.Tile.newBuilder()
-                tile.addLayers(layer.build())
                 endLog()
+                endLog = marker.startLogDuration("prepare features for encoding")
+                val geojson = GeoJSON(features = features)
+                //TODO: on the fly and keep original geometry in db!?
+//                val tile = projector.transformTile(Tile(geojson, z, x, y))
 
-                call.respondBytes(tile.build().toByteArray())
+                val z2 = 1 shl (if (z == 0) 0 else z)
+
+                val k1 = 0.5 * buffer / extend
+                val k3 = 1 + k1
+
+                projector.calcBbox(geojson)
+
+                val clipper = Clipper()
+                val clipped = clipper.clip(geojson, z2.toDouble(), x - k1, x + k3, y - k1, y + k3)
+                val tile = projector.transformTile(Tile(clipped, (1 shl z), x, y))
+
+                val encoder = Encoder()
+
+                endLog()
+                endLog = marker.startLogDuration("encode and transmit")
+                val encoded = encoder.encode(tile.geojson.features, baseLayer)
+
+                call.respondBytes(encoded.toByteArray())
+                endLog()
             }
 
             static("/static") {
@@ -174,14 +289,53 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         }
     }
 
-    private fun initCassandra(clusterBuilder: Cluster.Builder): Boolean {
+    private fun initCassandra(
+            clusterBuilder: Cluster.Builder,
+            strategy: String,
+            replication: Int,
+            keyspace: String,
+            table: String,
+            datacenter: String,
+            partitionKeys: List<String>,
+            primaryKeys: List<String>,
+            attributes: List<String>
+    ): Boolean {
         val cluster = clusterBuilder.build()
         val session = cluster.connect()
-        session.execute("CREATE  KEYSPACE IF NOT EXISTS geo " +
-                "WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };")
-        session.execute("USE geo;")
-        session.execute("CREATE TABLE IF NOT EXISTS features " +
-                "(z int, x int, y int, id text, geometry blob, PRIMARY KEY (z, x, y, id));")
+        if (strategy == "SimpleStrategy") {
+            session.execute("CREATE  KEYSPACE IF NOT EXISTS $keyspace " +
+                    "WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : $replication };")
+        } else {
+            session.execute("CREATE  KEYSPACE IF NOT EXISTS $keyspace " +
+                    "WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', '$datacenter' : $replication};")
+        }
+
+        val tableQuery = """
+            |CREATE TABLE IF NOT EXISTS $keyspace.$table
+            | (${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ", ") else ""} geometry text,
+            | PRIMARY KEY ((${partitionKeys.joinToString(", ")}) ${if (primaryKeys.isNotEmpty()) primaryKeys.joinToString(",", ", ") else ""}));
+        """.trimMargin().replace("\n".toRegex(), "")
+
+        val indexQuery = """
+            |CREATE CUSTOM INDEX IF NOT EXISTS geo_idx ON
+            | $keyspace.$table (geometry) USING 'com.stratio.cassandra.lucene.Index'
+            | WITH OPTIONS = {
+            |   'refresh_seconds': '1',
+            |    'schema': '{
+            |       fields: {
+            |           geometry: {
+            |               type: "geo_shape",
+            |               max_levels: 3,
+            |               transformations: [{type: "bbox"}]
+            |           }
+            |        }
+            |     }'
+            |};
+        """.trimMargin().replace("\n".toRegex(), "")
+
+        session.execute("USE $keyspace;")
+        session.execute(tableQuery)
+        session.execute(indexQuery)
         session.close()
         cluster.close()
         return true

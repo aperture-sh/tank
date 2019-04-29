@@ -2,12 +2,12 @@ version: '3'
 
 services:
   cassandra:
-    image: cassandra:3.11
+    image: geocode.igd.fraunhofer.de:4567/marauder/cassandra-lucene/master:7f9d4b9bb7dad4567944b29759878687e820d3e5
     volumes:
     - cassandra_data:/var/lib/cassandra
 
   tank:
-    image: geocode.igd.fraunhofer.de:4567/marauder/tank:latest
+    image: geocode.igd.fraunhofer.de:4567/marauder/tank:databio_lucene
     environment:
       - TANK_DB_HOSTS=cassandra
       - LOG_PATH=/app/logs
@@ -15,24 +15,6 @@ services:
     - tank_log:/app/logs
     ports:
     - '8888:8888'
-
-  filebeat:
-    image: docker.elastic.co/beats/filebeat:6.6.1
-    volumes:
-      - tank_log:/usr/share/filebeat/logs/tank:ro
-    command: |
-      bash -c 'bash -s <<EOF
-        cat > data/filebeat.yml <<EON
-          filebeat.inputs:
-          - type: log
-            enabled: true
-            paths:
-              - logs/tank/benchmark*.log
-          output.logstash:
-            hosts: ["logstash:5044"]
-      EON
-       ./filebeat -c data/filebeat.yml -e
-      EOF'
 
 volumes:
   cassandra_data:

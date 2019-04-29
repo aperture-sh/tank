@@ -11,17 +11,17 @@ class Benchmark(private val LOG: Logger) {
     fun startLog(format: String, vararg arguments: Any): (msg: String) -> Unit {
         val corrId = UUID.randomUUID().toString()
 
-        LOG.info("$corrId - $START_TOKEN $format", *arguments)
+        LOG.debug("$corrId - $START_TOKEN $format", *arguments)
         return fun (msg: String) {
-            LOG.info("$corrId - $END_TOKEN $msg")
+            LOG.debug("$corrId - $END_TOKEN $msg")
         }
     }
 
     fun startLogA(format: String, vararg arguments: Any): (x: String, Array<Any>) -> Unit {
         val corrId = UUID.randomUUID().toString()
-        LOG.info("$corrId - $START_TOKEN $format", *arguments)
+        LOG.debug("$corrId - $START_TOKEN $format", *arguments)
         return fun (format: String, vararg arguments: Any) {
-            LOG.info("$corrId - $END_TOKEN $format", *arguments)
+            LOG.debug("$corrId - $END_TOKEN $format", *arguments)
         }
     }
 
@@ -29,7 +29,7 @@ class Benchmark(private val LOG: Logger) {
         val startTime = System.nanoTime()
         return fun () {
             val duration = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime)
-            LOG.info("$duration ms - $format", *arguments)
+            LOG.debug("$duration ms - $format", *arguments)
         }
     }
 
