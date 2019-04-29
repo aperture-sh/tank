@@ -30,29 +30,29 @@ import com.datastax.driver.core.ConsistencyLevel
 import com.datastax.driver.core.LocalDate
 import com.datastax.driver.core.QueryOptions
 import com.google.gson.Gson
+import io.ktor.util.KtorExperimentalAPI
 
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
+    @KtorExperimentalAPI
     @InternalAPI
     @ImplicitReflectionSerializer
     fun Application.module() {
 
         val marker = Benchmark(LoggerFactory.getLogger(this::class.java))
 
-        val minZoom = environment.config.propertyOrNull("ktor.application.min_zoom")?.getString()?.toInt() ?: 2
-        val maxZoom = environment.config.propertyOrNull("ktor.application.max_zoom")?.getString()?.toInt() ?: 15
-        val baseLayer = environment.config.propertyOrNull("ktor.application.base_layer")?.getString()
+        val baseLayer = environment.config.propertyOrNull("ktor.application.tyler.base_layer")?.getString()
                 ?: "io.marauder.tank"
-        val extend = environment.config.propertyOrNull("ktor.application.extend")?.getString()?.toInt() ?: 4096
+        val extend = environment.config.propertyOrNull("ktor.application.tyler.extend")?.getString()?.toInt() ?: 4096
         val attrFields = environment.config.propertyOrNull("ktor.application.attr_field")?.getList() ?: emptyList()
-        val buffer = environment.config.propertyOrNull("ktor.application.buffer")?.getString()?.toInt() ?: 64
-        val dbHosts = environment.config.propertyOrNull("ktor.application.db_hosts")?.getString()?.split(",")?.map { it.trim() } ?: listOf("localhost")
-        val dbDatacenter = environment.config.propertyOrNull("ktor.application.db_datacenter")?.getString() ?: "datacenter1"
-        val dbStrategy = environment.config.propertyOrNull("ktor.application.db_strategy")?.getString() ?: "SimpleStrategy"
-        val dbKeyspace = environment.config.propertyOrNull("ktor.application.db_keyspace")?.getString() ?: "geo"
-        val dbTable = environment.config.propertyOrNull("ktor.application.db_table")?.getString() ?: "features"
-        val dbReplFactor = environment.config.propertyOrNull("ktor.application.replication_factor")?.getString()?.toInt() ?: 1
+        val buffer = environment.config.propertyOrNull("ktor.application.tyler.buffer")?.getString()?.toInt() ?: 64
+        val dbHosts = environment.config.propertyOrNull("ktor.application.db.hosts")?.getString()?.split(",")?.map { it.trim() } ?: listOf("localhost")
+        val dbDatacenter = environment.config.propertyOrNull("ktor.application.db.datacenter")?.getString() ?: "datacenter1"
+        val dbStrategy = environment.config.propertyOrNull("ktor.application.db.strategy")?.getString() ?: "SimpleStrategy"
+        val dbKeyspace = environment.config.propertyOrNull("ktor.application.db.keyspace")?.getString() ?: "geo"
+        val dbTable = environment.config.propertyOrNull("ktor.application.db.table")?.getString() ?: "features"
+        val dbReplFactor = environment.config.propertyOrNull("ktor.application.db.replication_factor")?.getString()?.toInt() ?: 1
 
         val qo = QueryOptions().setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
         val clusterBuilder = Cluster.builder().apply {
@@ -79,7 +79,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         val cluster = clusterBuilder.build()
         val session = cluster.connect("geo")
-        val tiler = Tyler(session, minZoom, maxZoom, extend, buffer, dbTable)
+        val tiler = Tyler(session, extend, buffer, dbTable)
         val projector = Projector()
 
 //        val q = session.prepare("SELECT geometry, id FROM features WHERE z=? AND x=? AND y=?;")

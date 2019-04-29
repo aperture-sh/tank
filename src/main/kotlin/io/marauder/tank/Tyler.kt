@@ -19,11 +19,9 @@ import kotlin.math.pow
 
 class Tyler(
         private val session: Session,
-        private val minZoom: Int = 2,
-        private val maxZoom: Int = 15,
         private val extend: Int = 4096,
         private val buffer: Int = 64,
-        private val dbTable: String = "features") {
+        dbTable: String = "features") {
 
     private val projector = Projector(extend)
     private val intersector = Intersector()
