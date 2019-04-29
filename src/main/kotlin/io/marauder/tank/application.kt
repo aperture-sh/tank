@@ -47,7 +47,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 ?: "io.marauder.tank"
         val extend = environment.config.propertyOrNull("ktor.application.tyler.extend")?.getString()?.toInt() ?: 4096
         val mainAttr = environment.config.propertyOrNull("ktor.application.tyler.main_attr")?.getString() ?: ""
-        val attributes = environment.config.propertyOrNull("ktor.application.tyler.attributes")?.getString()?.split(",")?.map { it.trim() } ?: listOf()
+        val mainAttrDefault = environment.config.propertyOrNull("ktor.application.tyler.main_attr_default")?.getString() ?: ""
+        val attributes = environment.config.propertyOrNull("ktor.application.tyler.attributes")?.getString()?.let { if (it == "") null else it }?.split(",")?.map { it.trim() } ?: listOf()
         val buffer = environment.config.propertyOrNull("ktor.application.tyler.buffer")?.getString()?.toInt() ?: 64
 
         val dbHosts = environment.config.propertyOrNull("ktor.application.db.hosts")?.getString()?.split(",")?.map { it.trim() } ?: listOf("localhost")
@@ -96,7 +97,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val query = """
             | SELECT geometry${if (attributes.isNotEmpty()) attributes.joinToString(",", ",") else "" }
             | FROM $dbTable
-            | WHERE ${ if (mainAttr != "") "$mainAttr = ? AND" else "" } expr(geo_idx, ?);
+            | WHERE ${ if (mainAttr != "") "$mainAttr = :main AND" else "" } expr(geo_idx, :json);
             | """.trimMargin()
 
         val q = session.prepare(query)
@@ -167,9 +168,15 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 val y = call.parameters["y"]?.toInt()?:-1
 
                 val gson = Gson()
+
+                val typeMap = attrFields.map { attr ->
+                    val (name, type) = attr.split(" ")
+                    name to type
+                }.toMap()
+
                 val filters = gson.fromJson<Map<String,Any>>(call.parameters["filter"]?:"{}", Map::class.java)
 
-                val img_date = (filters["img_date"] ?: "2016-08-05").toString().split('-')
+                val mainFilter = (filters[mainAttr] ?: mainAttrDefault).toString()
 
                 val box = projector.tileBBox(z, x, y)
 
@@ -196,8 +203,20 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 """.trimIndent()
 
                 val bound = q.bind()
-                        .setString(1, jsonQuery)
-                        .setDate(0, LocalDate.fromYearMonthDay(img_date[0].toInt(), img_date[1].toInt(), img_date[2].toInt()))
+                        .setString("json", jsonQuery)
+
+                if (mainAttr != "" && mainFilter != "") {
+                    when (typeMap[mainAttr]) {
+                        "int" ->  bound.setInt("main", mainFilter.toInt())
+                        "date" -> {
+                            val date = mainFilter.split("-")
+                            bound.setDate("main", LocalDate.fromYearMonthDay(date[0].toInt(), date[1].toInt(), date[2].toInt()))
+                        }
+                        "text" -> bound.setString("main", mainFilter)
+                        "timestamp" -> TODO("type not supported yet")
+                        else -> TODO("type not supported yet")
+                    }
+                }
 
                 endLog()
 
@@ -208,12 +227,13 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
                 endLog = marker.startLogDuration("fetch features")
                 val features = res.map { row ->
-                    val attrMap = attrFields.map { attr ->
-                        val (name, type) = attr.split(" ")
-                        when (type) {
-                            "int" -> name to Value.IntValue(row.getInt(name).toLong())
-                            "date" -> name to Value.StringValue(row.getDate(name).toString())
-                            "text" -> name to Value.StringValue(row.getString(name).toString())
+
+                    val attrMap = attributes.map { attr ->
+                        when (typeMap[attr]) {
+                            "int" -> attr to Value.IntValue(row.getInt(attr).toLong())
+                            "date" -> attr to Value.StringValue(row.getDate(attr).toString())
+                            "text" -> attr to Value.StringValue(row.getString(attr).toString())
+                            "timestamp" -> TODO("type not supported yet")
                             else -> TODO("type not supported yet")
                         }
                     }.toMap()
