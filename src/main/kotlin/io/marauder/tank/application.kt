@@ -53,7 +53,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         val dbHosts = environment.config.propertyOrNull("ktor.application.db.hosts")?.getString()?.split(",")?.map { it.trim() } ?: listOf("localhost")
         val dbUser = environment.config.propertyOrNull("ktor.application.db.user")?.getString() ?: ""
-        val dbPassword = environment.config.propertyOrNull("ktor.application.db_pw")?.getString() ?: ""
+        val dbPassword = environment.config.propertyOrNull("ktor.application.db.password")?.getString() ?: ""
         val dbDatacenter = environment.config.propertyOrNull("ktor.application.db.datacenter")?.getString() ?: "datacenter1"
         val dbStrategy = environment.config.propertyOrNull("ktor.application.db.strategy")?.getString() ?: "SimpleStrategy"
         val dbKeyspace = environment.config.propertyOrNull("ktor.application.db.keyspace")?.getString() ?: "geo"
