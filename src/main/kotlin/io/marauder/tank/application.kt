@@ -52,6 +52,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val buffer = environment.config.propertyOrNull("ktor.application.tyler.buffer")?.getString()?.toInt() ?: 64
 
         val dbHosts = environment.config.propertyOrNull("ktor.application.db.hosts")?.getString()?.split(",")?.map { it.trim() } ?: listOf("localhost")
+        val dbUser = environment.config.propertyOrNull("ktor.application.db_user")?.getString() ?: ""
+        val dbPassword = environment.config.propertyOrNull("ktor.application.db_pw")?.getString() ?: ""
         val dbDatacenter = environment.config.propertyOrNull("ktor.application.db.datacenter")?.getString() ?: "datacenter1"
         val dbStrategy = environment.config.propertyOrNull("ktor.application.db.strategy")?.getString() ?: "SimpleStrategy"
         val dbKeyspace = environment.config.propertyOrNull("ktor.application.db.keyspace")?.getString() ?: "geo"
@@ -67,6 +69,9 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         val qo = QueryOptions().setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
         val clusterBuilder = Cluster.builder().apply {
+            if (dbUser != "") {
+                withCredentials(dbUser, dbPassword)
+            }
             dbHosts.forEach {
                 addContactPoint(it)
             }
