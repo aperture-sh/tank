@@ -130,7 +130,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         routing {
             get("/") {
-                call.respondText("Tank Tyle Database is running")
+                call.respondText("Tank is running and the endpoints are available")
             }
 
             post("/{layer?}") {
@@ -248,6 +248,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 endLog()
                 endLog = marker.startLogDuration("prepare features for encoding")
                 val geojson = GeoJSON(features = features)
+                //TODO: on the fly and keep original geometry in db!?
 //                val tile = projector.transformTile(Tile(geojson, z, x, y))
 
                 val z2 = 1 shl (if (z == 0) 0 else z)
