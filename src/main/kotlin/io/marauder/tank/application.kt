@@ -86,7 +86,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 initCassandra(clusterBuilder, dbStrategy, dbReplFactor, dbKeyspace, dbTable, dbDatacenter, partitionKeys, primaryKeys, attrFields)
                 isConnected = true
             } catch (e: RuntimeException) {
-                println(e.stackTrace)
+                e.printStackTrace()
                 attempts--
                 runBlocking {
                     delay(3_000)
