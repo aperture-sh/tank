@@ -8,7 +8,7 @@ The tank stores geospatial data in a distributed way. The main endpoint provides
 
 ### Prerequisites
 Run a Cassandra instance:  
-`docker run --name cassandra -d  -p 9042:9042 cassandra:latest`  
+`docker run --name cassandra -d  -p 9042:9042  geocode.igd.fraunhofer.de:4567/marauder/cassandra-lucene:latest`  
 Connecting to DB is possible using the cqshl:  
 `docker run -it --link cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR"'`
 
