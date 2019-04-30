@@ -21,7 +21,7 @@ The `TANK_DB_HOSTS` variable is a comma-separated host list
 
 `GET /` - Print Tank info message  
 `POST /:layer?` accepts GeoJSON features separated by line to import, `geojson=true` indicates to import a GeoJSON file, the layer parameter is not used at the current release  
-`GET /z/x/y` - Request a tile, put `filter={"main_attr": "test"}` to filter the main attribute
+`GET /tile/z/x/y` - Request a tile, put `filter={"main_attr": "test"}` to filter the main attribute
 
 ### Configuration
 
