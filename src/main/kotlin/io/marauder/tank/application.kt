@@ -31,6 +31,8 @@ import com.datastax.driver.core.LocalDate
 import com.datastax.driver.core.QueryOptions
 import com.google.gson.Gson
 import io.ktor.util.KtorExperimentalAPI
+import java.io.File
+import java.util.UUID
 
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
@@ -42,6 +44,9 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
     fun Application.module() {
 
         val marker = Benchmark(LoggerFactory.getLogger(this::class.java))
+
+        val tmpDirectory = environment.config.propertyOrNull("ktor.application.tmp_dir")?.getString()
+                ?: "./tmp"
 
         val baseLayer = environment.config.propertyOrNull("ktor.application.tyler.base_layer")?.getString()
                 ?: "io.marauder.tank"
@@ -144,18 +149,21 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     call.respondText("Import layer must not be an empty string", status = HttpStatusCode.BadRequest)
                 } else {
                     val layer = "$baseLayer${if (baseLayer != "" && importLayer != "") "." else ""}$importLayer"
+                    val importId = UUID.randomUUID()
+                    val importFile = "$tmpDirectory/$importId"
+                    call.receiveStream().copyTo(File(importFile).outputStream())
                     if (call.parameters["geojson"] == "true") {
-                        val input = JSON.plain.parse<GeoJSON>(call.receiveText())
                         GlobalScope.launch {
+                            val input = JSON.plain.parse<GeoJSON>(File(importFile).readText())
                             tiler.import(projector.projectFeatures(input))
                         }
                     } else {
-                        val features = mutableListOf<Feature>()
-                        call.receiveStream().bufferedReader().useLines { lines ->
-                            lines.forEach { features.add(JSON.plain.parse(it)) }
-                        }
-                        val geojson = GeoJSON(features = features)
                         GlobalScope.launch {
+                            val features = mutableListOf<Feature>()
+                            File(importFile).bufferedReader().useLines { lines ->
+                                lines.forEach { features.add(JSON.plain.parse(it)) }
+                            }
+                            val geojson = GeoJSON(features = features)
                             val neu = projector.projectFeatures(geojson)
                             tiler.import(neu)
                         }
