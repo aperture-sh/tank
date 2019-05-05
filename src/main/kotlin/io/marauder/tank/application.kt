@@ -70,7 +70,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val attrFields = environment.config.propertyOrNull("ktor.application.data.attr_fields")?.getString()?.let { if (it == "") null else it }?.split(",")?.map { it.trim() } ?: listOf("timestamp")
         val addTimeStamp = environment.config.propertyOrNull("ktor.application.data.add_timestamp")?.getString()?.let { it == "true" } ?: true
 
-
+        File(tmpDirectory).mkdirs()
 
         val qo = QueryOptions().setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
         val clusterBuilder = Cluster.builder().apply {
@@ -150,22 +150,24 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 } else {
                     val layer = "$baseLayer${if (baseLayer != "" && importLayer != "") "." else ""}$importLayer"
                     val importId = UUID.randomUUID()
-                    val importFile = "$tmpDirectory/$importId"
-                    call.receiveStream().copyTo(File(importFile).outputStream())
+                    val importFile = File("$tmpDirectory/$importId")
+                    call.receiveStream().copyTo(importFile.outputStream())
                     if (call.parameters["geojson"] == "true") {
                         GlobalScope.launch {
-                            val input = JSON.plain.parse<GeoJSON>(File(importFile).readText())
+                            val input = JSON.plain.parse<GeoJSON>(importFile.readText())
                             tiler.import(projector.projectFeatures(input))
+                            importFile.delete()
                         }
                     } else {
                         GlobalScope.launch {
                             val features = mutableListOf<Feature>()
-                            File(importFile).bufferedReader().useLines { lines ->
+                            importFile.bufferedReader().useLines { lines ->
                                 lines.forEach { features.add(JSON.plain.parse(it)) }
                             }
                             val geojson = GeoJSON(features = features)
                             val neu = projector.projectFeatures(geojson)
                             tiler.import(neu)
+                            importFile.delete()
                         }
                     }
 
