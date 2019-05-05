@@ -31,6 +31,8 @@ import com.datastax.driver.core.LocalDate
 import com.datastax.driver.core.QueryOptions
 import com.google.gson.Gson
 import io.ktor.util.KtorExperimentalAPI
+import java.io.File
+import java.util.UUID
 
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
@@ -42,6 +44,9 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
     fun Application.module() {
 
         val marker = Benchmark(LoggerFactory.getLogger(this::class.java))
+
+        val tmpDirectory = environment.config.propertyOrNull("ktor.application.tmp_dir")?.getString()
+                ?: "./tmp"
 
         val baseLayer = environment.config.propertyOrNull("ktor.application.tyler.base_layer")?.getString()
                 ?: "io.marauder.tank"
@@ -65,7 +70,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val attrFields = environment.config.propertyOrNull("ktor.application.data.attr_fields")?.getString()?.let { if (it == "") null else it }?.split(",")?.map { it.trim() } ?: listOf("timestamp")
         val addTimeStamp = environment.config.propertyOrNull("ktor.application.data.add_timestamp")?.getString()?.let { it == "true" } ?: true
 
-
+        File(tmpDirectory).mkdirs()
 
         val qo = QueryOptions().setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
         val clusterBuilder = Cluster.builder().apply {
@@ -144,20 +149,28 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     call.respondText("Import layer must not be an empty string", status = HttpStatusCode.BadRequest)
                 } else {
                     val layer = "$baseLayer${if (baseLayer != "" && importLayer != "") "." else ""}$importLayer"
+                    val importId = UUID.randomUUID()
+                    val importFile = File("$tmpDirectory/$importId")
+                    call.receiveStream().copyTo(importFile.outputStream())
                     if (call.parameters["geojson"] == "true") {
-                        val input = JSON.plain.parse<GeoJSON>(call.receiveText())
                         GlobalScope.launch {
+                            val input = JSON.plain.parse<GeoJSON>(importFile.readText())
                             tiler.import(projector.projectFeatures(input))
+                            importFile.delete()
                         }
                     } else {
-                        val features = mutableListOf<Feature>()
-                        call.receiveStream().bufferedReader().useLines { lines ->
-                            lines.forEach { features.add(JSON.plain.parse(it)) }
-                        }
-                        val geojson = GeoJSON(features = features)
                         GlobalScope.launch {
-                            val neu = projector.projectFeatures(geojson)
-                            tiler.import(neu)
+                            importFile.bufferedReader().useLines { lines ->
+                                lines.chunked(1000).forEach { chunk ->
+                                    val features = mutableListOf<Feature>()
+                                    chunk.forEach { features.add(JSON.plain.parse(it)) }
+                                    val geojson = GeoJSON(features = features)
+                                    val neu = projector.projectFeatures(geojson)
+                                    tiler.import(neu)
+
+                                }
+                            }
+                            importFile.delete()
                         }
                     }
 
