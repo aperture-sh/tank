@@ -160,13 +160,16 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                         }
                     } else {
                         GlobalScope.launch {
-                            val features = mutableListOf<Feature>()
                             importFile.bufferedReader().useLines { lines ->
-                                lines.forEach { features.add(JSON.plain.parse(it)) }
+                                lines.chunked(1000).forEach { chunk ->
+                                    val features = mutableListOf<Feature>()
+                                    chunk.forEach { features.add(JSON.plain.parse(it)) }
+                                    val geojson = GeoJSON(features = features)
+                                    val neu = projector.projectFeatures(geojson)
+                                    tiler.import(neu)
+
+                                }
                             }
-                            val geojson = GeoJSON(features = features)
-                            val neu = projector.projectFeatures(geojson)
-                            tiler.import(neu)
                             importFile.delete()
                         }
                     }
