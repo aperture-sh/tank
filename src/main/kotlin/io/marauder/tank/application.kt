@@ -62,6 +62,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val dbDatacenter = environment.config.propertyOrNull("ktor.application.db.datacenter")?.getString() ?: "datacenter1"
         val dbStrategy = environment.config.propertyOrNull("ktor.application.db.strategy")?.getString() ?: "SimpleStrategy"
         val dbKeyspace = environment.config.propertyOrNull("ktor.application.db.keyspace")?.getString() ?: "geo"
+        val dbGeoIndex = environment.config.propertyOrNull("ktor.application.db.geo_index")?.getString() ?: "geo_index"
         val dbTable = environment.config.propertyOrNull("ktor.application.db.table")?.getString() ?: "features"
         val dbReplFactor = environment.config.propertyOrNull("ktor.application.db.replication_factor")?.getString()?.toInt() ?: 1
 
@@ -88,7 +89,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         var attempts = 10
         while (!isConnected && attempts >= 0) {
             try {
-                initCassandra(clusterBuilder, dbStrategy, dbReplFactor, dbKeyspace, dbTable, dbDatacenter, partitionKeys, primaryKeys, attrFields)
+                initCassandra(clusterBuilder, dbStrategy, dbReplFactor, dbKeyspace, dbGeoIndex, dbTable, dbDatacenter, partitionKeys, primaryKeys, attrFields)
                 isConnected = true
             } catch (e: RuntimeException) {
                 e.printStackTrace()
@@ -312,6 +313,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             strategy: String,
             replication: Int,
             keyspace: String,
+            geoIndex: String,
             table: String,
             datacenter: String,
             partitionKeys: List<String>,
@@ -335,7 +337,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         """.trimMargin().replace("\n".toRegex(), "")
 
         val indexQuery = """
-            |CREATE CUSTOM INDEX IF NOT EXISTS geo_idx ON
+            |CREATE CUSTOM INDEX IF NOT EXISTS $geoIndex ON
             | $keyspace.$table (geometry) USING 'com.stratio.cassandra.lucene.Index'
             | WITH OPTIONS = {
             |   'refresh_seconds': '1',
