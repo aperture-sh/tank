@@ -2,8 +2,8 @@ package io.marauder.tank
 
 import com.datastax.driver.core.LocalDate
 import com.datastax.driver.core.Session
-import io.marauder.supercharged.models.GeoJSON
-import io.marauder.supercharged.models.Value
+import io.marauder.charged.models.GeoJSON
+import io.marauder.charged.models.Value
 import kotlinx.serialization.ImplicitReflectionSerializer
 import org.slf4j.LoggerFactory
 import java.lang.ClassCastException

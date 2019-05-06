@@ -13,10 +13,10 @@ import java.time.*
 import io.ktor.http.content.resources
 import io.ktor.http.content.static
 import io.ktor.util.InternalAPI
-import io.marauder.supercharged.Clipper
-import io.marauder.supercharged.Encoder
-import io.marauder.supercharged.Projector
-import io.marauder.supercharged.models.*
+import io.marauder.charged.Clipper
+import io.marauder.charged.Encoder
+import io.marauder.charged.Projector
+import io.marauder.charged.models.*
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -117,8 +117,15 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             | WHERE expr($dbGeoIndex, :json);
             | """.trimMargin()
 
+        val countQuery = """
+            | SELECT count(*) AS count
+            | FROM $dbTable
+            | WHERE expr($dbGeoIndex, :json);
+            | """.trimMargin()
+
         val q = session.prepare(query)
         val qHuge = session.prepare(hugeQuery)
+        val qHeatmap = session.prepare(countQuery)
 
         install(Compression) {
             gzip {
@@ -300,6 +307,54 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
                 call.respondBytes(encoded.toByteArray())
                 endLog()
+            }
+
+            get("/heatmap/{z}/{x}/{y}") {
+                val z = call.parameters["z"]?.toInt()?:-1
+                val x = call.parameters["x"]?.toInt()?:-1
+                val y = call.parameters["y"]?.toInt()?:-1
+
+                val box = projector.tileBBox(z, x, y)
+
+                val poly = Geometry.Polygon(coordinates = listOf(listOf(
+                        listOf(box[0], box[1]),
+                        listOf(box[2], box[1]),
+                        listOf(box[2], box[3]),
+                        listOf(box[0], box[3]),
+                        listOf(box[0], box[1])
+                )))
+
+                val tileFeature = projector.projectFeature(Feature(geometry = poly))
+
+                val jsonQuery = """
+                    {
+                        filter: {
+                         type: "geo_shape",
+                         field: "geometry",
+                         operation: "intersects",
+                         shape: {
+                            type: "wkt",
+                            value: "${tileFeature.geometry.toWKT()}"
+                         }
+                        }
+                    }
+                """.trimIndent()
+
+                val res = session.execute(qHeatmap.bind().setString("json", jsonQuery))
+                val count = Value.IntValue(res.elementAt(0).getLong("count"))
+//                val count = Value.IntValue(1000)
+//                println(count)
+
+                val heatmapFeature = Feature(geometry = tileFeature.geometry, properties = mapOf("count" to count))
+
+                val tile = projector.transformTile(Tile(GeoJSON(features = listOf(heatmapFeature)), (1 shl z), x, y))
+//                println(tile)
+
+                val encoder = Encoder()
+
+                val encoded = encoder.encode(tile.geojson.features, baseLayer)
+
+                call.respondBytes(encoded.toByteArray())
             }
 
             static("/static") {
