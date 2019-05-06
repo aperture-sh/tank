@@ -79,7 +79,7 @@ class Tyler(
                 endLog()
                 if (i % 1000 == 0) log.info("#$i features stored to DB")
             } catch (e: ClassCastException) {
-                log.warn("Property skipped due property type collision.")
+                log.warn("Feature skipped due property type collision.")
             }
         }
 
