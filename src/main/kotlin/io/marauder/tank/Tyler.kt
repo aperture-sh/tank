@@ -33,13 +33,31 @@ class Tyler(
 
 
                 if (name != "timestamp") {
-                    when (type) {
-                        "int" -> bound.setInt(name, (f.properties[name] as Value.IntValue).value.toInt())
-                        "text" -> bound.setString(name, (f.properties[name] as Value.StringValue).value)
-                        "date" -> {
-                            val date = (f.properties["img_date"] as Value.StringValue).value.split('-')
-                            bound.setDate(name, LocalDate.fromYearMonthDay(date[0].toInt(), date[1].toInt(), date[2].toInt()))
+                    @Suppress("IMPLICIT_CAST_TO_ANY")
+                    val propertyValue = if (f.properties[name] != null) {
+                        when (type) {
+                            "int" -> (f.properties[name] as Value.IntValue).value.toInt()
+                            "text" -> (f.properties[name] as Value.StringValue).value
+                            "date" -> {
+                                val date = (f.properties["img_date"] as Value.StringValue).value.split('-')
+                                LocalDate.fromYearMonthDay(date[0].toInt(), date[1].toInt(), date[2].toInt())
+                            }
+                            else -> TODO("type not supported yet")
                         }
+                    } else {
+                        when (type) {
+                            "int" -> 0
+                            "text" -> ""
+                            "date" -> {
+                                LocalDate.fromYearMonthDay(1970, 1, 1)
+                            }
+                            else -> TODO("type not supported yet")
+                        }
+                    }
+                    when (type) {
+                        "int" -> bound.setInt(name, propertyValue as Int)
+                        "text" -> bound.setString(name, propertyValue as String)
+                        "date" -> bound.setDate(name, propertyValue as LocalDate)
                         else -> TODO("type not supported yet")
                     }
                 }
