@@ -108,7 +108,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val query = """
             | SELECT geometry${if (attributes.isNotEmpty()) attributes.joinToString(",", ",") else "" }
             | FROM $dbTable
-            | WHERE ${ if (mainAttr != "") "$mainAttr = :main AND" else "" } expr(geo_idx, :json);
+            | WHERE ${ if (mainAttr != "") "$mainAttr = :main AND" else "" } expr($dbGeoIndex, :json);
             | """.trimMargin()
 
         val q = session.prepare(query)
