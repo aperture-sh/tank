@@ -37,6 +37,7 @@ class Tyler(
                     val propertyValue = if (f.properties[name] != null) {
                         when (type) {
                             "int" -> (f.properties[name] as Value.IntValue).value.toInt()
+                            "double" -> (f.properties[name] as Value.DoubleValue).value
                             "text" -> (f.properties[name] as Value.StringValue).value
                             "date" -> {
                                 val date = (f.properties["img_date"] as Value.StringValue).value.split('-')
@@ -47,6 +48,7 @@ class Tyler(
                     } else {
                         when (type) {
                             "int" -> 0
+                            "double" -> 0.0
                             "text" -> ""
                             "date" -> {
                                 LocalDate.fromYearMonthDay(1970, 1, 1)
@@ -56,6 +58,7 @@ class Tyler(
                     }
                     when (type) {
                         "int" -> bound.setInt(name, propertyValue as Int)
+                        "double" -> bound.setDouble(name, propertyValue as Double)
                         "text" -> bound.setString(name, propertyValue as String)
                         "date" -> bound.setDate(name, propertyValue as LocalDate)
                         else -> TODO("type not supported yet")

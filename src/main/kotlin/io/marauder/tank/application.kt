@@ -250,6 +250,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     val attrMap = attributes.map { attr ->
                         when (typeMap[attr]) {
                             "int" -> attr to Value.IntValue(row.getInt(attr).toLong())
+                            "double" -> attr to Value.DoubleValue(row.getDouble(attr))
                             "date" -> attr to Value.StringValue(row.getDate(attr).toString())
                             "text" -> attr to Value.StringValue(row.getString(attr).toString())
                             "timestamp" -> TODO("type not supported yet")
