@@ -111,7 +111,14 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             | WHERE ${ if (mainAttr != "") "$mainAttr = :main AND" else "" } expr($dbGeoIndex, :json);
             | """.trimMargin()
 
+        val hugeQuery = """
+            | SELECT geometry${if (attributes.isNotEmpty()) attributes.joinToString(",", ",") else "" }
+            | FROM $dbTable
+            | WHERE expr($dbGeoIndex, :json);
+            | """.trimMargin()
+
         val q = session.prepare(query)
+        val qHuge = session.prepare(hugeQuery)
 
         install(Compression) {
             gzip {
@@ -221,10 +228,13 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     }
                 """.trimIndent()
 
-                val bound = q.bind()
-                        .setString("json", jsonQuery)
+                val bound = if (mainFilter == "*") {
+                    qHuge.bind().setString("json", jsonQuery)
+                } else {
+                    q.bind().setString("json", jsonQuery)
+                }
 
-                if (mainAttr != "" && mainFilter != "") {
+                if (mainAttr !in listOf("", "*") && mainFilter != "") {
                     when (typeMap[mainAttr]) {
                         "int" ->  bound.setInt("main", mainFilter.toInt())
                         "date" -> {
