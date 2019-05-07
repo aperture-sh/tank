@@ -407,6 +407,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             | $keyspace.$table (geometry) USING 'com.stratio.cassandra.lucene.Index'
             | WITH OPTIONS = {
             |   'refresh_seconds': '1',
+            |   'partitioner': '{type: "token", partitions: 4}',
             |    'schema': '{
             |       fields: {
             |           geometry: {
