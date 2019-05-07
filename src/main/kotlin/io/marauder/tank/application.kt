@@ -95,7 +95,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 e.printStackTrace()
                 attempts--
                 runBlocking {
-                    delay(3_000)
+                    delay(10_000)
                 }
             }
         }
