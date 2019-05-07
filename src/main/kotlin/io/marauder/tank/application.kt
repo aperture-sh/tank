@@ -118,7 +118,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             | """.trimMargin()
 
         val countQuery = """
-            | SELECT count(*) AS count
+            | SELECT count(id) AS count
             | FROM $dbTable
             | WHERE expr($dbGeoIndex, :json);
             | """.trimMargin()
