@@ -108,19 +108,19 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val query = """
             | SELECT geometry${if (attributes.isNotEmpty()) attributes.joinToString(",", ",") else "" }
             | FROM $dbTable
-            | WHERE ${ if (mainAttr != "") "$mainAttr = :main AND" else "" } expr($dbGeoIndex, :json);
+            | WHERE geohash = :hash AND ${ if (mainAttr != "") "$mainAttr = :main AND" else "" } expr($dbGeoIndex, :json);
             | """.trimMargin()
 
         val hugeQuery = """
             | SELECT geometry${if (attributes.isNotEmpty()) attributes.joinToString(",", ",") else "" }
             | FROM $dbTable
-            | WHERE expr($dbGeoIndex, :json);
+            | WHERE geohash = :hash AND expr($dbGeoIndex, :json);
             | """.trimMargin()
 
         val countQuery = """
-            | SELECT count(id) AS count
+            | SELECT count(timestamp) AS count
             | FROM $dbTable
-            | WHERE expr($dbGeoIndex, :json);
+            | WHERE geohash = :hash AND expr($dbGeoIndex, :json);
             | """.trimMargin()
 
         val q = session.prepare(query)
@@ -170,7 +170,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     if (call.parameters["geojson"] == "true") {
                         GlobalScope.launch {
                             val input = JSON.plain.parse<GeoJSON>(importFile.readText())
-                            tiler.import(projector.projectFeatures(input))
+                            tiler.import(input)
                             importFile.delete()
                         }
                     } else {
@@ -179,10 +179,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                                 lines.chunked(1000).forEach { chunk ->
                                     val features = mutableListOf<Feature>()
                                     chunk.forEach { features.add(JSON.plain.parse(it)) }
-                                    val geojson = GeoJSON(features = features)
-                                    val neu = projector.projectFeatures(geojson)
-                                    tiler.import(neu)
-
+                                    tiler.import(GeoJSON(features = features))
                                 }
                             }
                             importFile.delete()
@@ -221,6 +218,13 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                         listOf(box[0], box[1])
                 )))
 
+                val f = Feature(geometry = poly)
+                val centroid = f.geometry.toJTS().centroid
+                val tileNumber = projector.getTileNumber(centroid.y, centroid.x, 5)
+                val hash = GeoHashUtils.encode(
+                        projector.tileToLat(tileNumber.third, 5),
+                        projector.tileToLon(tileNumber.second, 5))
+
                 val jsonQuery = """
                     {
                         filter: {
@@ -229,7 +233,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                          operation: "intersects",
                          shape: {
                             type: "wkt",
-                            value: "${projector.projectFeature(Feature(geometry = poly)).geometry.toWKT()}"
+                            value: "${Feature(geometry = poly).geometry.toWKT()}"
                          }
                         }
                     }
@@ -240,6 +244,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 } else {
                     q.bind().setString("json", jsonQuery)
                 }
+
+                bound.setString("hash", hash)
 
                 if (mainAttr !in listOf("", "*") && mainFilter != "") {
                     when (typeMap[mainAttr]) {
@@ -275,18 +281,18 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                         }
                     }.toMap()
 
-                    Feature(
+                    projector.projectFeature(
+                            Feature(
                             geometry = Geometry.fromWKT(row.getString("geometry"))!!,
                             properties = attrMap,
                             id = "0"
+                            )
                     )
 
                 }
                 endLog()
                 endLog = marker.startLogDuration("prepare features for encoding")
                 val geojson = GeoJSON(features = features)
-                //TODO: on the fly and keep original geometry in db!?
-//                val tile = projector.transformTile(Tile(geojson, z, x, y))
 
                 val z2 = 1 shl (if (z == 0) 0 else z)
 
@@ -324,7 +330,12 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                         listOf(box[0], box[1])
                 )))
 
-                val tileFeature = projector.projectFeature(Feature(geometry = poly))
+                val tileFeature = Feature(geometry = poly)
+                val centroid = tileFeature.geometry.toJTS().centroid
+                val tileNumber = projector.getTileNumber(centroid.y, centroid.x, 5)
+                val hash = GeoHashUtils.encode(
+                        projector.tileToLat(tileNumber.third, 5),
+                        projector.tileToLon(tileNumber.second, 5))
 
                 val jsonQuery = """
                     {
@@ -340,15 +351,15 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     }
                 """.trimIndent()
 
-                val res = session.execute(qHeatmap.bind().setString("json", jsonQuery))
+                val bound = qHeatmap.bind()
+                        .setString("json", jsonQuery)
+                        .setString("hash", hash)
+                val res = session.execute(bound)
                 val count = Value.IntValue(res.elementAt(0).getLong("count"))
-//                val count = Value.IntValue(1000)
-//                println(count)
 
-                val heatmapFeature = Feature(geometry = tileFeature.geometry, properties = mapOf("count" to count))
+                val heatmapFeature = projector.projectFeature(Feature(geometry = tileFeature.geometry, properties = mapOf("count" to count)))
 
                 val tile = projector.transformTile(Tile(GeoJSON(features = listOf(heatmapFeature)), (1 shl z), x, y))
-//                println(tile)
 
                 val encoder = Encoder()
 
@@ -398,7 +409,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         val tableQuery = """
             |CREATE TABLE IF NOT EXISTS $keyspace.$table
-            | (${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ", ") else ""} geometry text,
+            | (geohash text, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ", ") else ""} geometry text,
             | PRIMARY KEY ((${partitionKeys.joinToString(", ")}) ${if (primaryKeys.isNotEmpty()) primaryKeys.joinToString(",", ", ") else ""}));
         """.trimMargin().replace("\n".toRegex(), "")
 
@@ -406,7 +417,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             |CREATE CUSTOM INDEX IF NOT EXISTS $geoIndex ON
             | $keyspace.$table (geometry) USING 'com.stratio.cassandra.lucene.Index'
             | WITH OPTIONS = {
-            |   'refresh_seconds': '1',
+            |   'refresh_seconds': '60',
             |   'partitioner': '{type: "token", partitions: 4}',
             |    'schema': '{
             |       fields: {

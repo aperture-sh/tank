@@ -2,6 +2,7 @@ package io.marauder.tank
 
 import com.datastax.driver.core.LocalDate
 import com.datastax.driver.core.Session
+import io.marauder.charged.Projector
 import io.marauder.charged.models.GeoJSON
 import io.marauder.charged.models.Value
 import kotlinx.serialization.ImplicitReflectionSerializer
@@ -16,10 +17,11 @@ class Tyler(
 
     private val attributes = attrFields.map { it.split(" ").first() }
     private val q = session.prepare("""
-        INSERT INTO $dbTable (${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ",") else "" } geometry)
-        VALUES (${ if (attributes.isNotEmpty()) attributes.map { if (addTimeStamp && it == "timestamp") "unixTimestampOf(now())" else ":$it" }.joinToString(", ", "", ", ") else "" } :geometry)
+        INSERT INTO $dbTable (geohash, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ",") else "" } geometry)
+        VALUES (:geohash, ${ if (attributes.isNotEmpty()) attributes.map { if (addTimeStamp && it == "timestamp") "unixTimestampOf(now())" else ":$it" }.joinToString(", ", "", ", ") else "" } :geometry)
     """.trimIndent())
 
+    private val projector = Projector()
 
     @ImplicitReflectionSerializer
     fun import(input: GeoJSON) {
@@ -70,7 +72,14 @@ class Tyler(
                     }
                 }
 
+                val centroid = f.geometry.toJTS().centroid
+                val tileNumber = projector.getTileNumber(centroid.y, centroid.x, 5)
+                val hash = GeoHashUtils.encode(
+                        projector.tileToLat(tileNumber.third, tileNumber.first),
+                        projector.tileToLon(tileNumber.second, tileNumber.first))
+
                 bound.setString("geometry", f.geometry.toWKT())
+                bound.setString("geohash", hash)
 
 
                 endLog()
