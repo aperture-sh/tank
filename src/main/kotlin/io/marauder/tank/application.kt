@@ -329,15 +329,32 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                         listOf(box[0], box[3]),
                         listOf(box[0], box[1])
                 )))
-
                 val tileFeature = Feature(geometry = poly)
-                val centroid = tileFeature.geometry.toJTS().centroid
-                val tileNumber = projector.getTileNumber(centroid.y, centroid.x, 5)
-                val hash = GeoHashUtils.encode(
-                        projector.tileToLat(tileNumber.third, 5),
-                        projector.tileToLon(tileNumber.second, 5))
+                projector.calcBbox(tileFeature)
+                val bbox = tileFeature.bbox
 
-                val jsonQuery = """
+                val clipper = Clipper()
+
+                val xDelta = bbox[2] - bbox[0]
+                val yDelta = bbox[3] - bbox[1]
+                val boxes = (0..3).map { i ->
+                    when (i) {
+                        0 -> clipper.clip(tileFeature, 1.0, bbox[0], bbox[0] + (xDelta/2), bbox[1], bbox[1] + (yDelta/2), false)
+                        1 -> clipper.clip(tileFeature, 1.0, bbox[0] + (xDelta/2), bbox[2], bbox[1], bbox[1] + (yDelta/2), false)
+                        2 -> clipper.clip(tileFeature, 1.0, bbox[0], bbox[0] + (xDelta/2), bbox[1] + (yDelta/2), bbox[3], false)
+                        3 -> clipper.clip(tileFeature, 1.0, bbox[0] + (xDelta/2), bbox[2], bbox[1] + (yDelta/2), bbox[3], false)
+                        else -> null
+                    }
+                }
+
+                val fs = boxes.map { f ->
+                    val centroid = f!!.geometry.toJTS().centroid
+                    val tileNumber = projector.getTileNumber(centroid.y, centroid.x, 5)
+                    val hash = GeoHashUtils.encode(
+                            projector.tileToLat(tileNumber.third, 5),
+                            projector.tileToLon(tileNumber.second, 5))
+
+                    val jsonQuery = """
                     {
                         filter: {
                          type: "geo_shape",
@@ -345,21 +362,22 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                          operation: "intersects",
                          shape: {
                             type: "wkt",
-                            value: "${tileFeature.geometry.toWKT()}"
+                            value: "${f.geometry.toWKT()}"
                          }
                         }
                     }
                 """.trimIndent()
 
-                val bound = qHeatmap.bind()
-                        .setString("json", jsonQuery)
-                        .setString("hash", hash)
-                val res = session.execute(bound)
-                val count = Value.IntValue(res.elementAt(0).getLong("count"))
+                    val bound = qHeatmap.bind()
+                            .setString("json", jsonQuery)
+                            .setString("hash", hash)
+                    val res = session.execute(bound)
+                    val count = Value.IntValue(res.elementAt(0).getLong("count"))
 
-                val heatmapFeature = projector.projectFeature(Feature(geometry = tileFeature.geometry, properties = mapOf("count" to count)))
+                    projector.projectFeature(Feature(geometry = f.geometry, properties = mapOf("count" to count)))
+                }
 
-                val tile = projector.transformTile(Tile(GeoJSON(features = listOf(heatmapFeature)), (1 shl z), x, y))
+                val tile = projector.transformTile(Tile(GeoJSON(features = fs), (1 shl z), x, y))
 
                 val encoder = Encoder()
 
