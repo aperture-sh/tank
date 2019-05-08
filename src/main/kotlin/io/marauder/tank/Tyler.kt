@@ -17,8 +17,8 @@ class Tyler(
 
     private val attributes = attrFields.map { it.split(" ").first() }
     private val q = session.prepare("""
-        INSERT INTO $dbTable (geohash, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ",") else "" } geometry)
-        VALUES (:geohash, ${ if (attributes.isNotEmpty()) attributes.map { if (addTimeStamp && it == "timestamp") "unixTimestampOf(now())" else ":$it" }.joinToString(", ", "", ", ") else "" } :geometry)
+        INSERT INTO $dbTable (geohash_data, geohash_heatmap, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ",") else "" } geometry)
+        VALUES (:geohash_data,:geohash_heatmap , ${ if (attributes.isNotEmpty()) attributes.map { if (addTimeStamp && it == "timestamp") "unixTimestampOf(now())" else ":$it" }.joinToString(", ", "", ", ") else "" } :geometry)
     """.trimIndent())
 
     private val projector = Projector()
@@ -73,13 +73,18 @@ class Tyler(
                 }
 
                 val centroid = f.geometry.toJTS().centroid
-                val tileNumber = projector.getTileNumber(centroid.y, centroid.x, 5)
-                val hash = GeoHashUtils.encode(
-                        projector.tileToLat(tileNumber.third, tileNumber.first),
-                        projector.tileToLon(tileNumber.second, tileNumber.first))
+                val tileNumberData = projector.getTileNumber(centroid.y, centroid.x, 5)
+                val tileNumberHeatmap = projector.getTileNumber(centroid.y, centroid.x, 10)
+                val hashData = GeoHashUtils.encode(
+                        projector.tileToLat(tileNumberData.third, tileNumberData.first),
+                        projector.tileToLon(tileNumberData.second, tileNumberData.first))
+                val hashHeatmap = GeoHashUtils.encode(
+                        projector.tileToLat(tileNumberHeatmap.third, tileNumberHeatmap.first),
+                        projector.tileToLon(tileNumberHeatmap.second, tileNumberHeatmap.first))
 
                 bound.setString("geometry", f.geometry.toWKT())
-                bound.setString("geohash", hash)
+                bound.setString("geohash_data", hashData)
+                bound.setString("geohash_heatmap", hashHeatmap)
 
 
                 endLog()

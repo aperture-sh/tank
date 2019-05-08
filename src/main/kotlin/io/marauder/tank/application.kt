@@ -108,19 +108,19 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val query = """
             | SELECT geometry${if (attributes.isNotEmpty()) attributes.joinToString(",", ",") else "" }
             | FROM $dbTable
-            | WHERE geohash = :hash AND ${ if (mainAttr != "") "$mainAttr = :main AND" else "" } expr($dbGeoIndex, :json);
+            | WHERE geohash_data = :hash AND geohash_heatmap = :hash2 AND ${ if (mainAttr != "") "$mainAttr = :main AND" else "" } expr($dbGeoIndex, :json);
             | """.trimMargin()
 
         val hugeQuery = """
             | SELECT geometry${if (attributes.isNotEmpty()) attributes.joinToString(",", ",") else "" }
             | FROM $dbTable
-            | WHERE geohash = :hash AND expr($dbGeoIndex, :json);
+            | WHERE geohash_data = :hash AND geohash_heatmap = :hash2 AND expr($dbGeoIndex, :json);
             | """.trimMargin()
 
         val countQuery = """
             | SELECT count(timestamp) AS count
             | FROM $dbTable
-            | WHERE geohash = :hash AND expr($dbGeoIndex, :json);
+            | WHERE geohash_data = :hash AND geohash_heatmap = :hash2 AND expr($dbGeoIndex, :json);
             | """.trimMargin()
 
         val q = session.prepare(query)
@@ -220,10 +220,15 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
                 val f = Feature(geometry = poly)
                 val centroid = f.geometry.toJTS().centroid
-                val tileNumber = projector.getTileNumber(centroid.y, centroid.x, 5)
-                val hash = GeoHashUtils.encode(
-                        projector.tileToLat(tileNumber.third, 5),
-                        projector.tileToLon(tileNumber.second, 5))
+                val tileNumber1 = projector.getTileNumber(centroid.y, centroid.x, 5)
+                val hash1 = GeoHashUtils.encode(
+                        projector.tileToLat(tileNumber1.third, 5),
+                        projector.tileToLon(tileNumber1.second, 5))
+
+                val tileNumber2 = projector.getTileNumber(centroid.y, centroid.x, 10)
+                val hash2 = GeoHashUtils.encode(
+                        projector.tileToLat(tileNumber2.third, 10),
+                        projector.tileToLon(tileNumber2.second, 10))
 
                 val jsonQuery = """
                     {
@@ -245,7 +250,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     q.bind().setString("json", jsonQuery)
                 }
 
-                bound.setString("hash", hash)
+                bound.setString("hash", hash1)
+                bound.setString("hash2", hash2)
 
                 if (mainAttr !in listOf("", "*") && mainFilter != "") {
                     when (typeMap[mainAttr]) {
@@ -335,24 +341,39 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
                 val clipper = Clipper()
 
-                val xDelta = bbox[2] - bbox[0]
-                val yDelta = bbox[3] - bbox[1]
-                val boxes = (0..3).map { i ->
-                    when (i) {
-                        0 -> clipper.clip(tileFeature, 1.0, bbox[0], bbox[0] + (xDelta/2), bbox[1], bbox[1] + (yDelta/2), false)
-                        1 -> clipper.clip(tileFeature, 1.0, bbox[0] + (xDelta/2), bbox[2], bbox[1], bbox[1] + (yDelta/2), false)
-                        2 -> clipper.clip(tileFeature, 1.0, bbox[0], bbox[0] + (xDelta/2), bbox[1] + (yDelta/2), bbox[3], false)
-                        3 -> clipper.clip(tileFeature, 1.0, bbox[0] + (xDelta/2), bbox[2], bbox[1] + (yDelta/2), bbox[3], false)
-                        else -> null
+                val n = 6
+                val xDelta = (bbox[2] - bbox[0])/n
+                val yDelta = (bbox[3] - bbox[1])/n
+                val boxes = (0 until n).map { i ->
+                    (0 until n).map { j ->
+                        val aa = clipper.clip(tileFeature, 1.0, bbox[0] + (i * xDelta), bbox[0] + ((i+1) * xDelta), bbox[1] + (j * yDelta), bbox[1] + ((j+1) * yDelta) )
+//                        println(aa)
+                        aa
                     }
+//                    when (i) {
+//                        0 -> clipper.clip(tileFeature, 1.0, bbox[0], bbox[0] + (xDelta/2), bbox[1], bbox[1] + (yDelta/2), false)
+//                        1 -> clipper.clip(tileFeature, 1.0, bbox[0] + (xDelta/2), bbox[2], bbox[1], bbox[1] + (yDelta/2), false)
+//                        2 -> clipper.clip(tileFeature, 1.0, bbox[0], bbox[0] + (xDelta/2), bbox[1] + (yDelta/2), bbox[3], false)
+//                        3 -> clipper.clip(tileFeature, 1.0, bbox[0] + (xDelta/2), bbox[2], bbox[1] + (yDelta/2), bbox[3], false)
+//                        else -> null
+//                    }
+                }.fold(listOf<Feature?>()) { r, l ->
+                    r + l
                 }
 
                 val fs = boxes.map { f ->
                     val centroid = f!!.geometry.toJTS().centroid
-                    val tileNumber = projector.getTileNumber(centroid.y, centroid.x, 5)
-                    val hash = GeoHashUtils.encode(
-                            projector.tileToLat(tileNumber.third, 5),
-                            projector.tileToLon(tileNumber.second, 5))
+                    val tileNumber1 = projector.getTileNumber(centroid.y, centroid.x, 5)
+                    val hash1 = GeoHashUtils.encode(
+                            projector.tileToLat(tileNumber1.third, 5),
+                            projector.tileToLon(tileNumber1.second, 5)
+                    )
+
+                    val tileNumber2 = projector.getTileNumber(centroid.y, centroid.x, 10)
+                    val hash2 = GeoHashUtils.encode(
+                            projector.tileToLat(tileNumber2.third, 10),
+                            projector.tileToLon(tileNumber2.second, 10)
+                    )
 
                     val jsonQuery = """
                     {
@@ -370,7 +391,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
                     val bound = qHeatmap.bind()
                             .setString("json", jsonQuery)
-                            .setString("hash", hash)
+                            .setString("hash", hash1)
+                            .setString("hash2", hash2)
                     val res = session.execute(bound)
                     val count = Value.IntValue(res.elementAt(0).getLong("count"))
 
@@ -427,7 +449,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         val tableQuery = """
             |CREATE TABLE IF NOT EXISTS $keyspace.$table
-            | (geohash text, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ", ") else ""} geometry text,
+            | (geohash_data text, geohash_heatmap text, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ", ") else ""} geometry text,
             | PRIMARY KEY ((${partitionKeys.joinToString(", ")}) ${if (primaryKeys.isNotEmpty()) primaryKeys.joinToString(",", ", ") else ""}));
         """.trimMargin().replace("\n".toRegex(), "")
 
