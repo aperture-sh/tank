@@ -26,12 +26,13 @@
                 'tank': {
                     "type": "vector",
                     "tiles": [location.protocol + '//' + location.host + "/tile/{z}/{x}/{y}"],
-                    "minzoom": 5
+                    "minzoom": 12
                 },
                 'tank2': {
                     "type": "vector",
                     "tiles": [location.protocol + '//' + location.host + "/heatmap/{z}/{x}/{y}"],
-                    "minzoom": 5
+                    "minzoom": 2,
+                    "maxzoom": 11
                 },
                 'OSM': {
                     "type": "raster",
@@ -71,7 +72,7 @@
                             ["linear"],
                             ["get", "count"],
                             0, "rgba(255,0,0,0.1)",
-                            100, "rgba(0,255,0,0.5)"
+                            1000, "rgba(0,255,0,0.5)"
                            ]
                     }
                 }

@@ -341,7 +341,11 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
                 val clipper = Clipper()
 
-                val n = 6
+                val n = when (z) {
+                    in (1..5) -> 24
+                    in (6..9) -> 24
+                    else -> 16
+                }
                 val xDelta = (bbox[2] - bbox[0])/n
                 val yDelta = (bbox[3] - bbox[1])/n
                 val boxes = (0 until n).map { i ->
