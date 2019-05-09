@@ -73,7 +73,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         File(tmpDirectory).mkdirs()
 
-        val qo = QueryOptions().setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+        val qo = QueryOptions().setConsistencyLevel(ConsistencyLevel.LOCAL_ONE)
         val clusterBuilder = Cluster.builder().apply {
             if (dbUser != "") {
                 withCredentials(dbUser, dbPassword)
