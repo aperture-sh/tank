@@ -74,7 +74,7 @@ class Tyler(
 
                 val centroid = f.geometry.toJTS().centroid
                 val tileNumberData = projector.getTileNumber(centroid.y, centroid.x, 5)
-                val tileNumberHeatmap = projector.getTileNumber(centroid.y, centroid.x, 10)
+                val tileNumberHeatmap = projector.getTileNumber(centroid.y, centroid.x, 13)
                 val hashData = GeoHashUtils.encode(
                         projector.tileToLat(tileNumberData.third, tileNumberData.first),
                         projector.tileToLon(tileNumberData.second, tileNumberData.first))

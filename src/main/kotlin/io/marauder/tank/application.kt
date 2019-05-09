@@ -120,7 +120,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val countQuery = """
             | SELECT count(timestamp) AS count
             | FROM $dbTable
-            | WHERE geohash_data = :hash AND geohash_heatmap = :hash2 AND expr($dbGeoIndex, :json);
+            | WHERE geohash_data = :hash_data AND geohash_heatmap = :hash_heatmap;
             | """.trimMargin()
 
         val q = session.prepare(query)
@@ -225,10 +225,10 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                         projector.tileToLat(tileNumber1.third, 5),
                         projector.tileToLon(tileNumber1.second, 5))
 
-                val tileNumber2 = projector.getTileNumber(centroid.y, centroid.x, 10)
+                val tileNumber2 = projector.getTileNumber(centroid.y, centroid.x, 13)
                 val hash2 = GeoHashUtils.encode(
-                        projector.tileToLat(tileNumber2.third, 10),
-                        projector.tileToLon(tileNumber2.second, 10))
+                        projector.tileToLat(tileNumber2.third, 13),
+                        projector.tileToLon(tileNumber2.second, 13))
 
                 val jsonQuery = """
                     {
@@ -373,10 +373,10 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                             projector.tileToLon(tileNumber1.second, 5)
                     )
 
-                    val tileNumber2 = projector.getTileNumber(centroid.y, centroid.x, 10)
+                    val tileNumber2 = projector.getTileNumber(centroid.y, centroid.x, 13)
                     val hash2 = GeoHashUtils.encode(
-                            projector.tileToLat(tileNumber2.third, 10),
-                            projector.tileToLon(tileNumber2.second, 10)
+                            projector.tileToLat(tileNumber2.third, 13),
+                            projector.tileToLon(tileNumber2.second, 13)
                     )
 
                     val jsonQuery = """
@@ -394,9 +394,9 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 """.trimIndent()
 
                     val bound = qHeatmap.bind()
-                            .setString("json", jsonQuery)
-                            .setString("hash", hash1)
-                            .setString("hash2", hash2)
+//                            .setString("json", jsonQuery)
+                            .setString("hash_data", hash1)
+                            .setString("hash_heatmap", hash2)
                     val res = session.execute(bound)
                     val count = Value.IntValue(res.elementAt(0).getLong("count"))
 
