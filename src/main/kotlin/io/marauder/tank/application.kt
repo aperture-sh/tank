@@ -222,7 +222,21 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                         listOf(ZcurveUtils.interleave(x, y))
                     }
                     else -> {
-                        listOf(ZcurveUtils.interleave(x, y))
+                        val box = projector.tileBBox(z, x, y)
+
+                        val poly = Geometry.Polygon(coordinates = listOf(listOf(
+                                listOf(box[0], box[1]),
+                                listOf(box[2], box[1]),
+                                listOf(box[2], box[3]),
+                                listOf(box[0], box[3]),
+                                listOf(box[0], box[1])
+                        )))
+
+                        val f = Feature(geometry = poly)
+                        val centroid = f.geometry.toJTS().centroid
+                        val tileNumber = projector.getTileNumber(centroid.y, centroid.x, hashLevel)
+
+                        listOf(ZcurveUtils.interleave(tileNumber.second, tileNumber.third))
                     }
                 }
 
