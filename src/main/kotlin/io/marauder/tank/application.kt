@@ -112,12 +112,6 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             | WHERE hash = :hash ${ if (mainAttr != "") "AND $mainAttr = :main" else "" };
             | """.trimMargin()
 
-        val hugeQuery = """
-            | SELECT geometry${if (attributes.isNotEmpty()) attributes.joinToString(",", "") else "" }
-            | FROM $dbTable
-            | WHERE hash = :hash;
-            | """.trimMargin()
-
         val countQuery = """
             | SELECT count(timestamp) AS count
             | FROM $dbTable
@@ -125,7 +119,6 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             | """.trimMargin()
 
         val q = session.prepare(query)
-        val qHuge = session.prepare(hugeQuery)
         val qHeatmap = session.prepare(countQuery)
 
         install(Compression) {
@@ -365,6 +358,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 val x = call.parameters["x"]?.toInt()?:-1
                 val y = call.parameters["y"]?.toInt()?:-1
 
+
+
                 val box = projector.tileBBox(z, x, y)
 
                 val poly = Geometry.Polygon(coordinates = listOf(listOf(
@@ -387,61 +382,54 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 }
                 val xDelta = (bbox[2] - bbox[0])/n
                 val yDelta = (bbox[3] - bbox[1])/n
-                val boxes = (0 until n).map { i ->
+                val fs = (0 until n).map { i ->
                     (0 until n).map { j ->
                         val aa = clipper.clip(tileFeature, 1.0, bbox[0] + (i * xDelta), bbox[0] + ((i+1) * xDelta), bbox[1] + (j * yDelta), bbox[1] + ((j+1) * yDelta) )
 //                        println(aa)
                         aa
                     }
-//                    when (i) {
-//                        0 -> clipper.clip(tileFeature, 1.0, bbox[0], bbox[0] + (xDelta/2), bbox[1], bbox[1] + (yDelta/2), false)
-//                        1 -> clipper.clip(tileFeature, 1.0, bbox[0] + (xDelta/2), bbox[2], bbox[1], bbox[1] + (yDelta/2), false)
-//                        2 -> clipper.clip(tileFeature, 1.0, bbox[0], bbox[0] + (xDelta/2), bbox[1] + (yDelta/2), bbox[3], false)
-//                        3 -> clipper.clip(tileFeature, 1.0, bbox[0] + (xDelta/2), bbox[2], bbox[1] + (yDelta/2), bbox[3], false)
-//                        else -> null
-//                    }
                 }.fold(listOf<Feature?>()) { r, l ->
                     r + l
-                }
-
-                val fs = boxes.map { f ->
+                }.map { f ->
                     val centroid = f!!.geometry.toJTS().centroid
-                    val tileNumber1 = projector.getTileNumber(centroid.y, centroid.x, 5)
-                    val hash1 = GeoHashUtils.encode(
-                            projector.tileToLat(tileNumber1.third, 5),
-                            projector.tileToLon(tileNumber1.second, 5)
-                    )
+                    val (_z, _x, _y) = projector.getTileNumber(centroid.y, centroid.x, hashLevel)
 
-                    val tileNumber2 = projector.getTileNumber(centroid.y, centroid.x, 13)
-                    val hash2 = GeoHashUtils.encode(
-                            projector.tileToLat(tileNumber2.third, 13),
-                            projector.tileToLon(tileNumber2.second, 13)
-                    )
-                    val hash = ZcurveUtils.interleave(tileNumber2.second, tileNumber2.third)
-
-
-                    val jsonQuery = """
-                    {
-                        filter: {
-                         type: "geo_shape",
-                         field: "geometry",
-                         operation: "intersects",
-                         shape: {
-                            type: "wkt",
-                            value: "${f.geometry.toWKT()}"
-                         }
+                    val count = when {
+                        _z < hashLevel -> {
+                            val delta = hashLevel - _z
+                            val xCurve1 = _x shl delta
+                            val yCurve1 = _y shl delta
+                            val xCurve2 = xCurve1 + Math.pow(2.toDouble(), delta.toDouble()).toInt() - 1
+                            val yCurve2 = yCurve1 + Math.pow(2.toDouble(), delta.toDouble()).toInt() - 1
+                            (ZcurveUtils.interleave(xCurve1, yCurve1) .. ZcurveUtils.interleave(xCurve2, yCurve2)).toList()
                         }
-                    }
-                """.trimIndent()
+                        _z == hashLevel -> {
+                            listOf(ZcurveUtils.interleave(_x, _y))
+                        }
+                        else -> {
+                            val _box = projector.tileBBox(_z, _x, _y)
 
-                    val bound = qHeatmap.bind()
-//                            .setString("json", jsonQuery)
-                            .setInt("hash", hash)
-//                            .setString("hash_heatmap", hash2)
-                    val res = session.execute(bound)
-                    val count = Value.IntValue(res.elementAt(0).getLong("count"))
-//                    println("$hash<>$count<>$tileNumber2")
-                    projector.projectFeature(Feature(geometry = f.geometry, properties = mapOf("count" to count)))
+                            val _poly = Geometry.Polygon(coordinates = listOf(listOf(
+                                    listOf(_box[0], _box[1]),
+                                    listOf(_box[2], _box[1]),
+                                    listOf(_box[2], _box[3]),
+                                    listOf(_box[0], _box[3]),
+                                    listOf(_box[0], _box[1])
+                            )))
+
+                            val _f = Feature(geometry = _poly)
+                            val _centroid = _f.geometry.toJTS().centroid
+                            val tileNumber = projector.getTileNumber(_centroid.y, _centroid.x, hashLevel)
+
+                            listOf(ZcurveUtils.interleave(tileNumber.second, tileNumber.third))
+                        }
+                    }.fold(0L) { c, zCurve ->
+                        val b = qHeatmap.bind().setInt("hash", zCurve)
+                        val res = session.execute(b)
+                        c + res.elementAt(0).getLong("count")
+                    }
+
+                    projector.projectFeature(Feature(geometry = f.geometry, properties = mapOf("count" to Value.IntValue(count))))
                 }.filter { (it.properties["count"] as Value.IntValue).value > 0 }
 
                 val tile = projector.transformTile(Tile(GeoJSON(features = fs), (1 shl z), x, y))
