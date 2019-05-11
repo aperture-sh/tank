@@ -442,7 +442,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     val count = Value.IntValue(res.elementAt(0).getLong("count"))
 //                    println("$hash<>$count<>$tileNumber2")
                     projector.projectFeature(Feature(geometry = f.geometry, properties = mapOf("count" to count)))
-                }//.filter { (it.properties["count"] as Value.IntValue).value > 0 }
+                }.filter { (it.properties["count"] as Value.IntValue).value > 0 }
 
                 val tile = projector.transformTile(Tile(GeoJSON(features = fs), (1 shl z), x, y))
 
