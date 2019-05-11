@@ -17,8 +17,8 @@ class Tyler(
 
     private val attributes = attrFields.map { it.split(" ").first() }
     private val q = session.prepare("""
-        INSERT INTO $dbTable (geohash_data, geohash_heatmap, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ",") else "" } geometry)
-        VALUES (:geohash_data,:geohash_heatmap , ${ if (attributes.isNotEmpty()) attributes.map { if (addTimeStamp && it == "timestamp") "unixTimestampOf(now())" else ":$it" }.joinToString(", ", "", ", ") else "" } :geometry)
+        INSERT INTO $dbTable (hash, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ",") else "" } geometry)
+        VALUES (:hash, ${ if (attributes.isNotEmpty()) attributes.map { if (addTimeStamp && it == "timestamp") "unixTimestampOf(now())" else ":$it" }.joinToString(", ", "", ", ") else "" } :geometry)
     """.trimIndent())
 
     private val projector = Projector()
@@ -82,9 +82,11 @@ class Tyler(
                         projector.tileToLat(tileNumberHeatmap.third, tileNumberHeatmap.first),
                         projector.tileToLon(tileNumberHeatmap.second, tileNumberHeatmap.first))
 
+                val hash = ZcurveUtils.interleave(tileNumberHeatmap.second, tileNumberHeatmap.third)
+
                 bound.setString("geometry", f.geometry.toWKT())
-                bound.setString("geohash_data", hashData)
-                bound.setString("geohash_heatmap", hashHeatmap)
+                bound.setInt("hash", hash)
+//                bound.setString("geohash_heatmap", hashHeatmap)
 
 
                 endLog()
