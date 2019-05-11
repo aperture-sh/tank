@@ -226,7 +226,6 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     }
                 }
 
-                println(hashes)
                 val features = hashes.flatMap { zCurve ->
                     val b = q.bind().setInt("hash", zCurve)
                     val res = session.execute(b)
