@@ -2,8 +2,9 @@ package io.marauder.tank
 
 import com.datastax.driver.core.LocalDate
 import com.datastax.driver.core.Session
-import io.marauder.supercharged.models.GeoJSON
-import io.marauder.supercharged.models.Value
+import io.marauder.charged.Projector
+import io.marauder.charged.models.GeoJSON
+import io.marauder.charged.models.Value
 import kotlinx.serialization.ImplicitReflectionSerializer
 import org.slf4j.LoggerFactory
 import java.lang.ClassCastException
@@ -16,10 +17,11 @@ class Tyler(
 
     private val attributes = attrFields.map { it.split(" ").first() }
     private val q = session.prepare("""
-        INSERT INTO $dbTable (${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ",") else "" } geometry)
-        VALUES (${ if (attributes.isNotEmpty()) attributes.map { if (addTimeStamp && it == "timestamp") "unixTimestampOf(now())" else ":$it" }.joinToString(", ", "", ", ") else "" } :geometry)
+        INSERT INTO $dbTable (hash, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ",") else "" } geometry)
+        VALUES (:hash, ${ if (attributes.isNotEmpty()) attributes.map { if (addTimeStamp && it == "timestamp") "unixTimestampOf(now())" else ":$it" }.joinToString(", ", "", ", ") else "" } :geometry)
     """.trimIndent())
 
+    private val projector = Projector()
 
     @ImplicitReflectionSerializer
     fun import(input: GeoJSON) {
@@ -70,7 +72,21 @@ class Tyler(
                     }
                 }
 
+                val centroid = f.geometry.toJTS().centroid
+                val tileNumberData = projector.getTileNumber(centroid.y, centroid.x, 5)
+                val tileNumberHeatmap = projector.getTileNumber(centroid.y, centroid.x, 13)
+                val hashData = GeoHashUtils.encode(
+                        projector.tileToLat(tileNumberData.third, tileNumberData.first),
+                        projector.tileToLon(tileNumberData.second, tileNumberData.first))
+                val hashHeatmap = GeoHashUtils.encode(
+                        projector.tileToLat(tileNumberHeatmap.third, tileNumberHeatmap.first),
+                        projector.tileToLon(tileNumberHeatmap.second, tileNumberHeatmap.first))
+
+                val hash = ZcurveUtils.interleave(tileNumberHeatmap.second, tileNumberHeatmap.third)
+
                 bound.setString("geometry", f.geometry.toWKT())
+                bound.setInt("hash", hash)
+//                bound.setString("geohash_heatmap", hashHeatmap)
 
 
                 endLog()

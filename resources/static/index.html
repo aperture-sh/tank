@@ -18,12 +18,21 @@
         'container': 'map',
         'maxTileCacheSize': 5,
         'minZoom': 2,
+        'zoom': 4,
+        'center': [-95.7129,37.0902],
         'style': {
             'version': 8,
             'sources': {
                 'tank': {
                     "type": "vector",
-                    "tiles": [location.protocol + '//' + location.host + "/tile/{z}/{x}/{y}"]
+                    "tiles": [location.protocol + '//' + location.host + "/tile/{z}/{x}/{y}"],
+                    "minzoom": 9
+                },
+                'tank2': {
+                    "type": "vector",
+                    "tiles": [location.protocol + '//' + location.host + "/heatmap/{z}/{x}/{y}"],
+                    "minzoom": 2,
+                    "maxzoom": 12
                 },
                 'OSM': {
                     "type": "raster",
@@ -50,7 +59,24 @@
                     "paint": {
                         "line-color": "#000000"
                     }
+                },
+                {
+                    "id": "geo2",
+                    "source": "tank2",
+                    "source-layer": "io.marauder.tank",
+                    "type": "fill",
+                    "paint": {
+                        "fill-color":
+                         [
+                            "interpolate",
+                            ["linear"],
+                            ["get", "count"],
+                            0, "rgba(0,255,0,0.1)",
+                            1000, "rgba(0,255,0,0.5)"
+                           ]
+                    }
                 }
+
             ]
         }
     });
