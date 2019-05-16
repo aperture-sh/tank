@@ -1,14 +1,14 @@
-FROM openjdk:8-jdk-alpine AS build
+FROM openjdk:11-jdk AS build
 
 ADD . /build
 WORKDIR /build
 
-RUN ./gradlew shadowJar
+RUN ./gradlew installDist
 
-FROM openjdk:8-jre-alpine
+FROM openjdk:11-jre
 
 ENV APPLICATION_USER ktor
-RUN adduser -D -g '' $APPLICATION_USER
+RUN useradd -s /bin/bash -m $APPLICATION_USER
 
 RUN mkdir -p /app/logs
 RUN mkdir /storage
@@ -19,11 +19,10 @@ USER $APPLICATION_USER
 
 EXPOSE 23513/tcp
 
-COPY --from=build /build/build/libs/tank-fat.jar /app/tank-fat.jar
+COPY --from=build /build/build/install/tank /app
 COPY --from=build /build/resources/application.conf /app/application.conf
-COPY --from=build /build/scripts/start.sh /app/start.sh
 WORKDIR /app
 
-ENTRYPOINT ["./start.sh"]
+ENTRYPOINT ["/app/bin/tank"]
 
 CMD ["-config=/app/application.conf"]

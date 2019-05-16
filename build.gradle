@@ -9,13 +9,11 @@ buildscript {
     
     dependencies {
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-        classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
     }
 }
 
 apply plugin: 'kotlin'
 apply plugin: 'application'
-apply plugin: 'com.github.johnrengelman.shadow'
 
 group 'io.marauder'
 version '0.0.1-SNAPSHOT'
@@ -70,10 +68,5 @@ dependencies {
     testCompile "io.ktor:ktor-metrics:$ktor_version"
     testCompile "io.ktor:ktor-websockets:$ktor_version"
     testCompile "io.ktor:ktor-gson:$ktor_version"
-}
-
-shadowJar {
-    classifier = 'fat'
-    version = null
 }
 
