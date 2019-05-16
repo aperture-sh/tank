@@ -103,7 +103,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         val cluster = clusterBuilder.build()
         val session = cluster.connect(dbKeyspace)
-        val tiler = Tyler(session, dbTable, addTimeStamp, attrFields)
+        val tiler = Tyler(session, dbTable, addTimeStamp, attrFields, hashLevel)
         val projector = Projector()
 
         val query = """
@@ -137,7 +137,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         }
 
         install(DefaultHeaders) {
-            header("X-Engine", "Ktor") // will send this header with each response
+            header("X-Engine", "Ktor")
         }
 
         install(io.ktor.websocket.WebSockets) {
@@ -202,6 +202,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
                 val mainFilter = (filters[mainAttr] ?: mainAttrDefault).toString()
 
+
+
                 val hashes = when {
                     z < hashLevel -> {
                         val delta = hashLevel - z
@@ -232,10 +234,25 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                         listOf(ZcurveUtils.interleave(tileNumber.second, tileNumber.third))
                     }
                 }
+                endLog()
 
                 val features = hashes.flatMap { zCurve ->
                     val b = q.bind().setInt("hash", zCurve)
+                    if (mainAttr !in listOf("", "*")) {
+                        when (typeMap[mainAttr]) {
+                            "int" ->  b.setInt("main", mainFilter.toInt())
+                            "date" -> {
+                                val date = mainFilter.split("-")
+                                b.setDate("main", LocalDate.fromYearMonthDay(date[0].toInt(), date[1].toInt(), date[2].toInt()))
+                            }
+                            "text" -> b.setString("main", mainFilter)
+                            "timestamp" -> TODO("type not supported yet")
+                            else -> TODO("type not supported yet")
+                        }
+                    }
+                    endLog = marker.startLogDuration("CQL statement execution")
                     val res = session.execute(b)
+                    endLog()
                     res.map { row ->
 
                         val attrMap = attributes.map { attr ->
@@ -249,87 +266,20 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                             }
                         }.toMap()
 
-                        projector.projectFeature(
+                        endLog = marker.startLogDuration("Prepare features")
+                        val projectedFeatures = projector.projectFeature(
                                 Feature(
                                         geometry = Geometry.fromWKT(row.getString("geometry"))!!,
                                         properties = attrMap,
                                         id = "0"
                                 )
                         )
-
+                        endLog()
+                        projectedFeatures
                     }
                 }
 
-                /*val box = projector.tileBBox(z, x, y)
-
-                val poly = Geometry.Polygon(coordinates = listOf(listOf(
-                        listOf(box[0], box[1]),
-                        listOf(box[2], box[1]),
-                        listOf(box[2], box[3]),
-                        listOf(box[0], box[3]),
-                        listOf(box[0], box[1])
-                )))
-
-                val f = Feature(geometry = poly)
-                val centroid = f.geometry.toJTS().centroid
-                val tileNumber2 = projector.getTileNumber(centroid.y, centroid.x, hashLevel)
-
-                val hash = ZcurveUtils.interleave(tileNumber2.second, tileNumber2.third)
-                println(hash)
-
-                val bound = if (mainFilter == "*") {
-                    qHuge.bind()
-                } else {
-                    q.bind()
-                }
-
-                bound.setInt("hash", hash)
-
-                if (mainAttr !in listOf("", "*")) {
-                    when (typeMap[mainAttr]) {
-                        "int" ->  bound.setInt("main", mainFilter.toInt())
-                        "date" -> {
-                            val date = mainFilter.split("-")
-                            bound.setDate("main", LocalDate.fromYearMonthDay(date[0].toInt(), date[1].toInt(), date[2].toInt()))
-                        }
-                        "text" -> bound.setString("main", mainFilter)
-                        "timestamp" -> TODO("type not supported yet")
-                        else -> TODO("type not supported yet")
-                    }
-                }
-
-                endLog()
-
-                endLog = marker.startLogDuration("CQL statement execution")
-                val res = session.execute(bound)
-                endLog()
-
-
-                endLog = marker.startLogDuration("fetch features")
-                val features = res.map { row ->
-
-                    val attrMap = attributes.map { attr ->
-                        when (typeMap[attr]) {
-                            "int" -> attr to Value.IntValue(row.getInt(attr).toLong())
-                            "double" -> attr to Value.DoubleValue(row.getDouble(attr))
-                            "date" -> attr to Value.StringValue(row.getDate(attr).toString())
-                            "text" -> attr to Value.StringValue(row.getString(attr).toString())
-                            "timestamp" -> TODO("type not supported yet")
-                            else -> TODO("type not supported yet")
-                        }
-                    }.toMap()
-
-                    projector.projectFeature(
-                            Feature(
-                            geometry = Geometry.fromWKT(row.getString("geometry"))!!,
-                            properties = attrMap,
-                            id = "0"
-                            )
-                    )
-
-                }
-                endLog()
-                endLog = marker.startLogDuration("prepare features for encoding")*/
+                endLog = marker.startLogDuration("prepare features for encoding")
                 val geojson = GeoJSON(features = features)
 
                 val z2 = 1 shl (if (z == 0) 0 else z)
@@ -384,9 +334,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 val yDelta = (bbox[3] - bbox[1])/n
                 val fs = (0 until n).map { i ->
                     (0 until n).map { j ->
-                        val aa = clipper.clip(tileFeature, 1.0, bbox[0] + (i * xDelta), bbox[0] + ((i+1) * xDelta), bbox[1] + (j * yDelta), bbox[1] + ((j+1) * yDelta) )
-//                        println(aa)
-                        aa
+                        clipper.clip(tileFeature, 1.0, bbox[0] + (i * xDelta), bbox[0] + ((i+1) * xDelta), bbox[1] + (j * yDelta), bbox[1] + ((j+1) * yDelta) )
                     }
                 }.fold(listOf<Feature?>()) { r, l ->
                     r + l

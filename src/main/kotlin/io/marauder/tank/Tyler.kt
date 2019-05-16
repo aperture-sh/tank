@@ -13,12 +13,13 @@ class Tyler(
         private val session: Session,
         dbTable: String = "features",
         addTimeStamp: Boolean = true,
-        private val attrFields: List<String>) {
+        private val attrFields: List<String>,
+        private val hashLevel: Int) {
 
     private val attributes = attrFields.map { it.split(" ").first() }
     private val q = session.prepare("""
         INSERT INTO $dbTable (hash, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ",") else "" } geometry)
-        VALUES (:hash, ${ if (attributes.isNotEmpty()) attributes.map { if (addTimeStamp && it == "timestamp") "unixTimestampOf(now())" else ":$it" }.joinToString(", ", "", ", ") else "" } :geometry)
+        VALUES (:hash, ${ if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ", ") { if (addTimeStamp && it == "timestamp") "unixTimestampOf(now())" else ":$it" } else "" } :geometry)
     """.trimIndent())
 
     private val projector = Projector()
@@ -73,21 +74,13 @@ class Tyler(
                 }
 
                 val centroid = f.geometry.toJTS().centroid
-                val tileNumberData = projector.getTileNumber(centroid.y, centroid.x, 5)
-                val tileNumberHeatmap = projector.getTileNumber(centroid.y, centroid.x, 13)
-                val hashData = GeoHashUtils.encode(
-                        projector.tileToLat(tileNumberData.third, tileNumberData.first),
-                        projector.tileToLon(tileNumberData.second, tileNumberData.first))
-                val hashHeatmap = GeoHashUtils.encode(
-                        projector.tileToLat(tileNumberHeatmap.third, tileNumberHeatmap.first),
-                        projector.tileToLon(tileNumberHeatmap.second, tileNumberHeatmap.first))
+                val tileNumber = projector.getTileNumber(centroid.y, centroid.x, hashLevel)
 
-                val hash = ZcurveUtils.interleave(tileNumberHeatmap.second, tileNumberHeatmap.third)
+
+                val hash = ZcurveUtils.interleave(tileNumber.second, tileNumber.third)
 
                 bound.setString("geometry", f.geometry.toWKT())
                 bound.setInt("hash", hash)
-//                bound.setString("geohash_heatmap", hashHeatmap)
-
 
                 endLog()
                 endLog = marker.startLogDuration("store geometry to database")
@@ -101,7 +94,6 @@ class Tyler(
 
         log.info("#${input.features.size} features importing finished")
     }
-
 
     companion object {
         private val log = LoggerFactory.getLogger(Tyler::class.java)
