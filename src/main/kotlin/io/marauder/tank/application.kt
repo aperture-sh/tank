@@ -107,7 +107,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val projector = Projector()
 
         val query = """
-            | SELECT geometry${if (attributes.isNotEmpty()) attributes.joinToString(",", "") else "" }
+            | SELECT geometry${if (attributes.isNotEmpty()) attributes.joinToString(",", ", ", "") else "" }
             | FROM $dbTable
             | WHERE hash = :hash ${ if (mainAttr != "") "AND $mainAttr = :main" else "" };
             | """.trimMargin()
