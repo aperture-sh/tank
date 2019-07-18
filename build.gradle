@@ -43,6 +43,7 @@ dependencies {
     compile "io.ktor:ktor-metrics:$ktor_version"
     compile "io.ktor:ktor-websockets:$ktor_version"
     compile "io.ktor:ktor-gson:$ktor_version"
+    compile "io.ktor:ktor-client-apache:$ktor_version"
 
     compile "org.jetbrains.kotlinx:kotlinx-serialization-runtime:0.9.1"
     

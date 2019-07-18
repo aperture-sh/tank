@@ -72,6 +72,10 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val addTimeStamp = environment.config.propertyOrNull("ktor.application.data.add_timestamp")?.getString()?.let { it == "true" } ?: true
         val hashLevel = environment.config.propertyOrNull("ktor.application.data.hash_level")?.getString()?.toInt() ?: 13
 
+        val exhausterHost = environment.config.propertyOrNull("ktor.application.exhauster.host")?.getString() ?: "localhost"
+        val exhausterPort = environment.config.propertyOrNull("ktor.application.exhauster.port")?.getString()?.toInt() ?: 8080
+        val exhausterEnabled = environment.config.propertyOrNull("ktor.application.exhauster.enabled")?.getString()?.toBoolean() ?: false
+
         File(tmpDirectory).mkdirs()
 
         val qo = QueryOptions().setConsistencyLevel(ConsistencyLevel.LOCAL_ONE)
@@ -103,7 +107,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         val cluster = clusterBuilder.build()
         val session = cluster.connect(dbKeyspace)
-        val tiler = Tyler(session, dbTable, addTimeStamp, attrFields, hashLevel)
+        val exhauster = if (exhausterEnabled) Exhauster(exhausterHost, exhausterPort) else null
+        val tiler = Tyler(session, dbTable, addTimeStamp, attrFields, hashLevel, exhauster)
         val projector = Projector()
 
         val query = """

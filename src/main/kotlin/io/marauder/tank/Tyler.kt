@@ -5,16 +5,20 @@ import com.datastax.driver.core.Session
 import io.marauder.charged.Projector
 import io.marauder.charged.models.GeoJSON
 import io.marauder.charged.models.Value
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.ImplicitReflectionSerializer
 import org.slf4j.LoggerFactory
 import java.lang.ClassCastException
 
+@ImplicitReflectionSerializer
 class Tyler(
         private val session: Session,
         dbTable: String = "features",
         addTimeStamp: Boolean = true,
         private val attrFields: List<String>,
-        private val hashLevel: Int) {
+        private val hashLevel: Int,
+        private val exhauster: Exhauster?) {
 
     private val attributes = attrFields.map { it.split(" ").first() }
     private val q = session.prepare("""
@@ -88,7 +92,13 @@ class Tyler(
                 endLog()
                 if (i % 1000 == 0) log.info("#$i features stored to DB")
             } catch (e: ClassCastException) {
-                log.warn("Feature skipped due property type collision.")
+                if (exhauster != null) {
+                    GlobalScope.launch {
+                        exhauster.pushFeature(f)
+                    }
+                } else {
+                    log.warn("Feature skipped due property type collision.")
+                }
             }
         }
 
