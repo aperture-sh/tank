@@ -48,7 +48,17 @@ class Tyler(
                             when (type) {
                                 "int" -> (f.properties[name] as Value.IntValue).value.toInt()
                                 "double" -> (f.properties[name] as Value.DoubleValue).value
-                                "text" -> (f.properties[name] as Value.StringValue).value
+                                "text" -> {
+                                    try {
+                                        (f.properties[name] as Value.StringValue).value
+                                    } catch (e: ClassCastException) {
+                                        when (f.properties[name]) {
+                                            is Value.IntValue -> (f.properties[name] as Value.IntValue).value.toString()
+                                            is Value.DoubleValue -> (f.properties[name] as Value.IntValue).value.toString()
+                                            else -> TODO("type not supported yet")
+                                        }
+                                    }
+                                }
                                 "date" -> {
                                     val date = (f.properties["img_date"] as Value.StringValue).value.split('-')
                                     LocalDate.fromYearMonthDay(date[0].toInt(), date[1].toInt(), date[2].toInt())
