@@ -47,7 +47,17 @@ class Tyler(
 
                             when (type) {
                                 "int" -> (f.properties[name] as Value.IntValue).value.toInt()
-                                "double" -> (f.properties[name] as Value.DoubleValue).value
+                                "double" -> {
+                                    try {
+                                        (f.properties[name] as Value.DoubleValue).value
+                                    } catch (e: ClassCastException) {
+                                        when (f.properties[name]) {
+                                            is Value.IntValue -> (f.properties[name] as Value.IntValue).value.toDouble()
+                                            is Value.StringValue -> (f.properties[name] as Value.StringValue).value.toInt()
+                                            else -> TODO("type not supported yet")
+                                        }
+                                    }
+                                }
                                 "text" -> {
                                     try {
                                         (f.properties[name] as Value.StringValue).value
