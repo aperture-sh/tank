@@ -53,7 +53,7 @@ class Tyler(
                                     } catch (e: ClassCastException) {
                                         when (f.properties[name]) {
                                             is Value.IntValue -> (f.properties[name] as Value.IntValue).value.toDouble()
-                                            is Value.StringValue -> (f.properties[name] as Value.StringValue).value.toInt()
+                                            is Value.StringValue -> (f.properties[name] as Value.StringValue).value.toDouble()
                                             else -> TODO("type not supported yet")
                                         }
                                     }
