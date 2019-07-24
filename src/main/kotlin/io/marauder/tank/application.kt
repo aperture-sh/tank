@@ -32,6 +32,7 @@ import com.datastax.driver.core.QueryOptions
 import com.google.gson.Gson
 import io.ktor.util.KtorExperimentalAPI
 import java.io.File
+import java.lang.Exception
 import java.util.UUID
 
 
@@ -165,27 +166,31 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     val layer = "$baseLayer${if (baseLayer != "" && importLayer != "") "." else ""}$importLayer"
                     val importId = UUID.randomUUID()
                     val importFile = File("$tmpDirectory/$importId")
-                    call.receiveStream().copyTo(importFile.outputStream())
-                    if (call.parameters["geojson"] == "true") {
-                        GlobalScope.launch {
-                            val input = JSON.plain.parse<GeoJSON>(importFile.readText())
-                            tiler.import(input)
-                            importFile.delete()
-                        }
-                    } else {
-                        GlobalScope.launch {
-                            importFile.bufferedReader().useLines { lines ->
-                                lines.chunked(1000).forEach { chunk ->
-                                    val features = mutableListOf<Feature>()
-                                    chunk.forEach { features.add(JSON.plain.parse(it)) }
-                                    tiler.import(GeoJSON(features = features))
+                    try {
+                        call.receiveStream().copyTo(importFile.outputStream())
+                        if (call.parameters["geojson"] == "true") {
+                            GlobalScope.launch {
+                                val input = JSON.plain.parse<GeoJSON>(importFile.readText())
+                                tiler.import(input)
+                            }
+                        } else {
+                            GlobalScope.launch {
+                                importFile.bufferedReader().useLines { lines ->
+                                    lines.chunked(1000).forEach { chunk ->
+                                        val features = mutableListOf<Feature>()
+                                        chunk.forEach { features.add(JSON.plain.parse(it)) }
+                                        tiler.import(GeoJSON(features = features))
+                                    }
                                 }
                             }
-                            importFile.delete()
                         }
-                    }
 
-                    call.respondText("Features Accepted", contentType = ContentType.Text.Plain, status = HttpStatusCode.Accepted)
+                        call.respondText("Features Accepted", contentType = ContentType.Text.Plain, status = HttpStatusCode.Accepted)
+                    } catch (e: Exception) {
+                        call.respondText("Internal Exception", contentType = ContentType.Text.Plain, status = HttpStatusCode.InternalServerError)
+                    } finally {
+                        importFile.delete()
+                    }
                 }
             }
 
