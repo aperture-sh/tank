@@ -119,6 +119,14 @@ class Tyler(
                 } else {
                     log.warn("Feature skipped due property type collision.")
                 }
+            } catch (e: NumberFormatException) {
+                if (exhauster != null) {
+                    GlobalScope.launch {
+                        exhauster.pushFeature(f)
+                    }
+                } else {
+                    log.warn("Feature skipped due property type collision.")
+                }
             }
         }
 
