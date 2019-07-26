@@ -172,6 +172,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                             GlobalScope.launch {
                                 val input = JSON.plain.parse<GeoJSON>(importFile.readText())
                                 tiler.import(input)
+                                importFile.delete()
                             }
                         } else {
                             GlobalScope.launch {
@@ -182,13 +183,13 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                                         tiler.import(GeoJSON(features = features))
                                     }
                                 }
+                                importFile.delete()
                             }
                         }
 
                         call.respondText("Features Accepted", contentType = ContentType.Text.Plain, status = HttpStatusCode.Accepted)
                     } catch (e: Exception) {
                         call.respondText("Internal Exception", contentType = ContentType.Text.Plain, status = HttpStatusCode.InternalServerError)
-                    } finally {
                         importFile.delete()
                     }
                 }
