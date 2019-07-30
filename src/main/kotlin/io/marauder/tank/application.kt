@@ -110,6 +110,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val session = cluster.connect(dbKeyspace)
         val exhauster = if (exhausterEnabled) Exhauster(exhausterHost, exhausterPort) else null
         val tiler = Tyler(session, dbTable, addTimeStamp, attrFields, hashLevel, exhauster)
+        val fileWaitGroup = FileWaitGroup(tiler)
         val projector = Projector()
 
         val query = """
@@ -167,7 +168,9 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                     val importId = UUID.randomUUID()
                     val importFile = File("$tmpDirectory/$importId")
                     try {
-                        call.receiveStream().copyTo(importFile.outputStream())
+                        val stream = call.receiveStream()
+                        stream.copyTo(importFile.outputStream())
+
                         if (call.parameters["geojson"] == "true") {
                             GlobalScope.launch {
                                 val input = JSON.plain.parse<GeoJSON>(importFile.readText())
@@ -176,15 +179,10 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                             }
                         } else {
                             GlobalScope.launch {
-                                importFile.bufferedReader().useLines { lines ->
-                                    lines.chunked(1000).forEach { chunk ->
-                                        val features = mutableListOf<Feature>()
-                                        chunk.forEach { features.add(JSON.plain.parse(it)) }
-                                        tiler.import(GeoJSON(features = features))
-                                    }
-                                }
-                                importFile.delete()
+                                fileWaitGroup.add(importFile)
                             }
+
+
                         }
 
                         call.respondText("Features Accepted", contentType = ContentType.Text.Plain, status = HttpStatusCode.Accepted)
