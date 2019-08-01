@@ -11,44 +11,43 @@ import org.slf4j.LoggerFactory
 import java.io.File
 
 @ImplicitReflectionSerializer
-class FileWaitGroup(private val tyler: Tyler) {
-    private var runners = mutableListOf<Job>()
-    private var maxRunners = 1
-    private var files = mutableListOf<File>()
+class FileWaitGroup(private val tyler: Tyler, private val tmpDir : String) {
+    private val maxRunners = 1
+    private var runners = 0
 
-
-    suspend fun add(f: File) {
-        files.add(f)
-        if (runners.isEmpty()) {
+    suspend fun startRunner() {
+        if (runners < maxRunners) {
             runner@while (true) {
-                if (files.isNotEmpty() && runners.size <= maxRunners) {
-                    val file = files.first()
-                    files.remove(file)
+                val fileList = File(tmpDir).listFiles { _, name -> !name.contains(".lock")}
+                if (fileList != null && fileList.isNotEmpty() && runners < maxRunners) {
+                    runners += 1
+                    val file = fileList.first()
+                    val tmpFile = File("${file.absolutePath}.lock")
+                    file.renameTo(tmpFile)
                     val job = GlobalScope.launch {
                         log.info("Start processing file: ${file.name}")
+                        var count = 0
 
-                        file.bufferedReader().useLines { lines ->
-                            var count = 0
-                            lines.forEach { line ->
-                                val feature = JSON.plain.parse(Feature.serializer(), line)
-                                tyler.import(feature)
-                                count += 1
-                                if (count % 1000 == 0) log.info("1000 features imported")
-                            }
+                        tmpFile.bufferedReader().forEachLine { line ->
+                            val feature = JSON.plain.parse(Feature.serializer(), line)
+                            tyler.import(feature)
+                            count += 1
+                            if (count % 1000 == 0) log.info("1000 features imported")
                         }
 
                     }
-                    runners.add(job)
                     GlobalScope.launch {
                         job.join()
                         log.info("Finished processing file: ${file.name}")
-                        runners.remove(job)
-                        file.delete()
+                        tmpFile.delete()
+                        runners -= 1
                     }
                 } else {
-                    log.info("Waiting for free runners to procress more files")
                     delay(2000)
-                    if (files.isEmpty()) break@runner
+                    val fileList2 = File(tmpDir).listFiles { _, name -> !name.contains(".lock")}
+                    if (fileList2 != null && fileList2.isEmpty()) {
+                        break@runner
+                    }
 
                 }
             }

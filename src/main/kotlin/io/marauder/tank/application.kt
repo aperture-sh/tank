@@ -110,7 +110,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val session = cluster.connect(dbKeyspace)
         val exhauster = if (exhausterEnabled) Exhauster(exhausterHost, exhausterPort) else null
         val tiler = Tyler(session, dbTable, addTimeStamp, attrFields, hashLevel, exhauster)
-        val fileWaitGroup = FileWaitGroup(tiler)
+        val fileWaitGroup = FileWaitGroup(tiler, tmpDirectory)
         val projector = Projector()
 
         val query = """
@@ -179,7 +179,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                             }
                         } else {
                             GlobalScope.launch {
-                                fileWaitGroup.add(importFile)
+                                fileWaitGroup.startRunner()
                             }
 
 
