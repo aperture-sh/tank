@@ -185,9 +185,9 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
                         }
 
-                        call.respondText("Features Accepted", contentType = ContentType.Text.Plain, status = HttpStatusCode.Accepted)
+                        call.respondText("{\"msg\": \"file accepted\", \"id\": \"$importId\"}", contentType = ContentType.Application.Json, status = HttpStatusCode.Accepted)
                     } catch (e: Exception) {
-                        call.respondText("Internal Exception", contentType = ContentType.Text.Plain, status = HttpStatusCode.InternalServerError)
+                        call.respondText("{\"msg\": \"${e.message}\"}", contentType = ContentType.Application.Json, status = HttpStatusCode.InternalServerError)
                         importFile.delete()
                     }
                 }
