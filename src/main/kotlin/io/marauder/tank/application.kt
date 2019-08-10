@@ -119,6 +119,13 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             | WHERE hash = :hash ${ if (mainAttr != "") "AND $mainAttr = :main" else "" };
             | """.trimMargin()
 
+
+        val deleteQuery = """
+            | DELETE
+            | FROM $dbTable
+            | WHERE hash = :hash;
+            | """.trimMargin()
+
         val countQuery = """
             | SELECT count(timestamp) AS count
             | FROM $dbTable
@@ -126,6 +133,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             | """.trimMargin()
 
         val q = session.prepare(query)
+        val qDelete = session.prepare(deleteQuery)
         val qHeatmap = session.prepare(countQuery)
 
         install(Compression) {
@@ -147,12 +155,6 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             header("X-Engine", "Ktor")
         }
 
-        install(io.ktor.websocket.WebSockets) {
-            pingPeriod = Duration.ofSeconds(15)
-            timeout = Duration.ofSeconds(15)
-            maxFrameSize = Long.MAX_VALUE
-            masking = false
-        }
 
         routing {
             get("/") {
@@ -312,6 +314,52 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
                 endLog()
             }
 
+            delete("/{z}/{x}/{y}") {
+                val z = call.parameters["z"]?.toInt()?:-1
+                val x = call.parameters["x"]?.toInt()?:-1
+                val y = call.parameters["y"]?.toInt()?:-1
+
+                val hashes = when {
+                    z < hashLevel -> {
+                        val delta = hashLevel - z
+                        val xCurve1 = x shl delta
+                        val yCurve1 = y shl delta
+                        val xCurve2 = xCurve1 + Math.pow(2.toDouble(), delta.toDouble()).toInt() - 1
+                        val yCurve2 = yCurve1 + Math.pow(2.toDouble(), delta.toDouble()).toInt() - 1
+                        (ZcurveUtils.interleave(xCurve1, yCurve1) .. ZcurveUtils.interleave(xCurve2, yCurve2)).toList()
+                    }
+                    z == hashLevel -> {
+                        listOf(ZcurveUtils.interleave(x, y))
+                    }
+                    else -> {
+                        val box = projector.tileBBox(z, x, y)
+
+                        val poly = Geometry.Polygon(coordinates = listOf(listOf(
+                                listOf(box[0], box[1]),
+                                listOf(box[2], box[1]),
+                                listOf(box[2], box[3]),
+                                listOf(box[0], box[3]),
+                                listOf(box[0], box[1])
+                        )))
+
+                        val f = Feature(geometry = poly)
+                        val centroid = f.geometry.toJTS().centroid
+                        val tileNumber = projector.getTileNumber(centroid.y, centroid.x, hashLevel)
+
+                        listOf(ZcurveUtils.interleave(tileNumber.second, tileNumber.third))
+                    }
+                }
+
+                hashes.forEach { zCurve ->
+                    val b = qDelete.bind().setInt("hash", zCurve)
+                    println(zCurve)
+                    val res = session.execute(b)
+
+                }
+
+                call.respondText("ended")
+            }
+
             get("/heatmap/{z}/{x}/{y}") {
                 val z = call.parameters["z"]?.toInt()?:-1
                 val x = call.parameters["x"]?.toInt()?:-1
@@ -463,7 +511,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         session.execute("USE $keyspace;")
         session.execute(tableQuery)
-        session.execute(indexQuery)
+//        session.execute(indexQuery)
         session.close()
         cluster.close()
         return true
