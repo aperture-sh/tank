@@ -281,6 +281,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                                 "date" -> attr to Value.StringValue(row.getDate(attr).toString())
                                 "text" -> attr to Value.StringValue(row.getString(attr).toString())
                                 "timestamp" -> TODO("type not supported yet")
+                                "uuid" -> attr to Value.StringValue(row.getUUID(attr).toString())
                                 else -> TODO("type not supported yet")
                             }
                         }.toMap()
@@ -496,7 +497,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
 
         val tableQuery = """
             |CREATE TABLE IF NOT EXISTS $keyspace.$table
-            | (hash int, uid uuid, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ", ") else ""} geometry text,
+            | (hash int, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ", ") else ""} geometry text,
             | PRIMARY KEY ((${partitionKeys.joinToString(", ")}) ${if (primaryKeys.isNotEmpty()) primaryKeys.joinToString(",", ", ") else ""}));
         """.trimMargin().replace("\n".toRegex(), "")
 
