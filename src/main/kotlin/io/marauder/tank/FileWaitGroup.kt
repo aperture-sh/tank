@@ -2,7 +2,6 @@ package io.marauder.tank
 
 import io.marauder.charged.models.Feature
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.ImplicitReflectionSerializer
@@ -12,7 +11,7 @@ import java.io.File
 
 @ImplicitReflectionSerializer
 class FileWaitGroup(private val tyler: Tyler, private val tmpDir : String) {
-    private val maxRunners = 1
+    private val maxRunners = 2
     private var runners = 0
 
     suspend fun startRunner() {
