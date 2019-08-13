@@ -195,6 +195,14 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                 }
             }
 
+            get("/{uuid}") {
+                call.respondText("not implemented yet")
+            }
+
+            delete("/{uuid}") {
+                call.respondText("not implemented yet")
+            }
+
             get("/tile/{z}/{x}/{y}") {
 
                 var endLog = marker.startLogDuration("prepare query")
@@ -314,7 +322,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                 endLog()
             }
 
-            delete("/{z}/{x}/{y}") {
+            delete("/tile/{z}/{x}/{y}") {
                 val z = call.parameters["z"]?.toInt()?:-1
                 val x = call.parameters["x"]?.toInt()?:-1
                 val y = call.parameters["y"]?.toInt()?:-1
