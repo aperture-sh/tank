@@ -10,7 +10,7 @@ import java.io.File
 
 @ImplicitReflectionSerializer
 class FileWaitGroup(private val tyler: Tyler, private val tmpDir : String) {
-    private val maxRunners = 10
+    private val maxRunners = 2
     private var runners = 0
 
     suspend fun startRunner() {
