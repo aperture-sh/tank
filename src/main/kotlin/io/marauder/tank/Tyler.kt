@@ -150,10 +150,10 @@ class Tyler(
                 }
                 break@retry
             } catch (e: WriteTimeoutException) {
-                log.warn("Increasing CQL execution delay time due high DB usage")
+                log.warn("Increasing CQL execution delay time due high DB usage (now at $delay ms)")
                 delay += delay + 1000
             } catch (e: OperationTimedOutException) {
-                log.warn("Increasing CQL execution delay time due high DB usage")
+                log.warn("Increasing CQL execution delay time due high DB usage (now at $delay ms)")
                 delay += delay + 1000
             }
         } while (true)
