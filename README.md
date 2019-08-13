@@ -40,3 +40,4 @@ Adding `-config=resources/application.conf` can be used to specify another confi
 * For now there are no additional indices build for doing queries on other field than geometry and the partition keys.
 * `geometry` is a reserved field. One is not allowed to use it as a attribute field in the configuration.
 * `timestamp` is a reserved field. One is not allowed to use it for other purposes than storing the current timestamp.
+* `hash` and `uid` are reserved fields to. These are the mandatory partition key fields

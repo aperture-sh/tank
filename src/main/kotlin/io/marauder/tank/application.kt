@@ -95,7 +95,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
         var attempts = 10
         while (!isConnected && attempts >= 0) {
             try {
-                initCassandra(clusterBuilder, dbStrategy, dbReplFactor, dbKeyspace, dbGeoIndex, dbTable, dbDatacenter, partitionKeys, primaryKeys, attrFields)
+                initCassandra(clusterBuilder, dbStrategy, dbReplFactor, dbKeyspace, dbGeoIndex, "uuid_index", dbTable, dbDatacenter, partitionKeys, primaryKeys, attrFields)
                 isConnected = true
             } catch (e: RuntimeException) {
                 e.printStackTrace()
@@ -127,7 +127,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
             | """.trimMargin()
 
         val countQuery = """
-            | SELECT count(timestamp) AS count
+            | SELECT count(uid) AS count
             | FROM $dbTable
             | WHERE hash = :hash;
             | """.trimMargin()
@@ -469,6 +469,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
             replication: Int,
             keyspace: String,
             geoIndex: String,
+            uuidIndex: String,
             table: String,
             datacenter: String,
             partitionKeys: List<String>,
@@ -487,11 +488,11 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
 
         val tableQuery = """
             |CREATE TABLE IF NOT EXISTS $keyspace.$table
-            | (hash int, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ", ") else ""} geometry text,
+            | (hash int, uid uuid, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ", ") else ""} geometry text,
             | PRIMARY KEY ((${partitionKeys.joinToString(", ")}) ${if (primaryKeys.isNotEmpty()) primaryKeys.joinToString(",", ", ") else ""}));
         """.trimMargin().replace("\n".toRegex(), "")
 
-        val indexQuery = """
+        val indexQueryLucene = """
             |CREATE CUSTOM INDEX IF NOT EXISTS $geoIndex ON
             | $keyspace.$table (geometry) USING 'com.stratio.cassandra.lucene.Index'
             | WITH OPTIONS = {
@@ -509,9 +510,15 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
             |};
         """.trimMargin().replace("\n".toRegex(), "")
 
+        val indexQueryUUID = """
+            |CREATE INDEX IF NOT EXISTS $uuidIndex ON
+            | $keyspace.$table (uid);
+        """.trimMargin().replace("\n".toRegex(), "")
+
         session.execute("USE $keyspace;")
         session.execute(tableQuery)
 //        session.execute(indexQuery)
+        session.execute(indexQueryUUID)
         session.close()
         cluster.close()
         return true

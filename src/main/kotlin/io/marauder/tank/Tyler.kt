@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.ImplicitReflectionSerializer
 import org.slf4j.LoggerFactory
 import java.lang.ClassCastException
+import java.util.*
 
 @ImplicitReflectionSerializer
 class Tyler(
@@ -23,8 +24,8 @@ class Tyler(
 
     private val attributes = attrFields.map { it.split(" ").first() }
     private val q = session.prepare("""
-        INSERT INTO $dbTable (hash, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ",") else "" } geometry)
-        VALUES (:hash, ${ if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ", ") { if (addTimeStamp && it == "timestamp") "unixTimestampOf(now())" else ":$it" } else "" } :geometry)
+        INSERT INTO $dbTable (hash, uid, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ",") else "" } geometry)
+        VALUES (:hash, :uid, ${ if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ", ") { if (addTimeStamp && it == "timestamp") "unixTimestampOf(now())" else ":$it" } else "" } :geometry)
     """.trimIndent())
 
     private val projector = Projector()
@@ -114,6 +115,7 @@ class Tyler(
 
             bound.setString("geometry", f.geometry.toWKT())
             bound.setInt("hash", hash)
+            bound.setUUID("uid", UUID.randomUUID())
 
             endLog()
             endLog = marker.startLogDuration("store geometry to database")
