@@ -36,7 +36,7 @@ import java.lang.Exception
 import java.util.UUID
 
 
-fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
+fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
 
 
     @KtorExperimentalAPI
