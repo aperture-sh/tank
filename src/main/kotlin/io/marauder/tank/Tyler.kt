@@ -27,8 +27,8 @@ class Tyler(
 
     private val attributes = attrFields.map { it.split(" ").first() }
     private val q = session.prepare("""
-        INSERT INTO $dbTable (hash, uid, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ",") else "" } geometry)
-        VALUES (:hash, :uid, ${ if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ", ") { if (addTimeStamp && it == "timestamp") "unixTimestampOf(now())" else ":$it" } else "" } :geometry)
+        INSERT INTO $dbTable (hash, ${if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ",") else "" } geometry)
+        VALUES (:hash, ${ if (attributes.isNotEmpty()) attributes.joinToString(", ", "", ", ") { if (addTimeStamp && it == "timestamp") "unixTimestampOf(now())" else ":$it" } else "" } :geometry)
     """.trimIndent())
 
     private val projector = Projector()
