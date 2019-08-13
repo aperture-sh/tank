@@ -1,17 +1,16 @@
 package io.marauder.tank
 
 import io.marauder.charged.models.Feature
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlinx.serialization.json.JSON
 import org.slf4j.LoggerFactory
+import java.io.BufferedReader
 import java.io.File
 
 @ImplicitReflectionSerializer
 class FileWaitGroup(private val tyler: Tyler, private val tmpDir : String) {
-    private val maxRunners = 2
+    private val maxRunners = 10
     private var runners = 0
 
     suspend fun startRunner() {
@@ -27,7 +26,14 @@ class FileWaitGroup(private val tyler: Tyler, private val tmpDir : String) {
                         log.info("Start processing file: ${file.name}")
                         var count = 0
 
-                        tmpFile.bufferedReader().forEachLine { line ->
+                        val reader = tmpFile.bufferedReader()
+                        readline@while (true) {
+                            suspend fun suspendReadLine(reader: BufferedReader) =
+                                    withContext(Dispatchers.IO) {
+                                        reader.readLine()
+                                    }
+
+                            val line = suspendReadLine(reader) ?: break@readline
                             val feature = JSON.plain.parse(Feature.serializer(), line)
                             tyler.import(feature)
                             count += 1
