@@ -58,7 +58,7 @@ class Tyler(
                     val (name, type) = attr.split(" ")
 
 
-                    if (name != "timestamp") {
+                    if (name !in listOf("timestamp", "uid")) {
                         @Suppress("IMPLICIT_CAST_TO_ANY")
                         val propertyValue = if (f.properties[name] != null) {
 
