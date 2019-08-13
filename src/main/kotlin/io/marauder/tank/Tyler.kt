@@ -44,6 +44,7 @@ class Tyler(
 
     fun import(f: Feature) {
         var endLog = marker.startLogDuration("prepare geometry")
+        val uuid = UUID.randomUUID()
 
         try {
             val bound = q.bind()
@@ -115,7 +116,7 @@ class Tyler(
 
             bound.setString("geometry", f.geometry.toWKT())
             bound.setInt("hash", hash)
-            bound.setUUID("uid", UUID.randomUUID())
+            bound.setUUID("uid", uuid)
 
             endLog()
             endLog = marker.startLogDuration("store geometry to database")
@@ -124,7 +125,7 @@ class Tyler(
         } catch (e: ClassCastException) {
             if (exhauster != null) {
                 GlobalScope.launch {
-                    exhauster.pushFeature(f)
+                    exhauster.pushFeature(uuid, f)
                 }
             } else {
                 log.warn("Feature skipped due property type collision.")
@@ -132,7 +133,7 @@ class Tyler(
         } catch (e: NumberFormatException) {
             if (exhauster != null) {
                 GlobalScope.launch {
-                    exhauster.pushFeature(f)
+                    exhauster.pushFeature(uuid, f)
                 }
             } else {
                 log.warn("Feature skipped due property type collision.")

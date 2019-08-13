@@ -11,6 +11,7 @@ import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlinx.serialization.json.JSON
 import kotlinx.serialization.stringify
 import org.slf4j.LoggerFactory
+import java.util.*
 
 @ImplicitReflectionSerializer
 class Exhauster(private val host: String, private val port: Int) {
@@ -24,10 +25,15 @@ class Exhauster(private val host: String, private val port: Int) {
 
     }
 
-    suspend fun pushFeature(f: Feature) {
+    suspend fun pushFeature(uuid: UUID, f: Feature) {
+        val tmp = Feature(
+                id = uuid.toString(),
+                geometry = f.geometry,
+                properties = f.properties
+        )
         val call = http.call(urlString = "http://$host:$port/") {
             method = HttpMethod.Post
-            body = JSON.plain.stringify(f)
+            body = JSON.plain.stringify(tmp)
             header("ContentType", "application/json")
         }
         log.info("Fan out to Exhauster - ${call.response.readText()}")
