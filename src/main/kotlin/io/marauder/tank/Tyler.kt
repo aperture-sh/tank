@@ -2,8 +2,7 @@ package io.marauder.tank
 
 import com.datastax.driver.core.LocalDate
 import com.datastax.driver.core.Session
-import com.datastax.driver.core.exceptions.OperationTimedOutException
-import com.datastax.driver.core.exceptions.WriteTimeoutException
+import com.datastax.driver.core.exceptions.QueryExecutionException
 import io.marauder.charged.Projector
 import io.marauder.charged.models.Feature
 import io.marauder.charged.models.GeoJSON
@@ -141,7 +140,7 @@ class Tyler(
                         exhauster.pushFeature(uuid, f)
                     }
                 } else {
-                    log.warn("Feature skipped due property type collision.")
+                    log.warn("Feature skipped due property type collision (cause ${e.message}).")
                 }
                 break@retry
             } catch (e: NumberFormatException) {
@@ -150,14 +149,11 @@ class Tyler(
                         exhauster.pushFeature(uuid, f)
                     }
                 } else {
-                    log.warn("Feature skipped due property type collision.")
+                    log.warn("Feature skipped due property type collision (cause ${e.message}).")
                 }
                 break@retry
-            } catch (e: WriteTimeoutException) {
-                log.warn("Increasing CQL execution delay time due high DB usage (now at $delay ms)")
-                delay += delay + 1000
-            } catch (e: OperationTimedOutException) {
-                log.warn("Increasing CQL execution delay time due high DB usage (now at $delay ms)")
+            } catch (e: QueryExecutionException) {
+                log.warn("Increasing query execution delay due high DB usage (now at $delay ms, cause ${e.message})")
                 delay += delay + 1000
             }
         } while (true)
