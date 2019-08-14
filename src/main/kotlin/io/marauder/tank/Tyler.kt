@@ -128,7 +128,11 @@ class Tyler(
                 endLog = marker.startLogDuration("store geometry to database")
                 delay(delay)
                 session.execute(bound)
-                delay -= 1000
+                if (delay > 1000) {
+                    delay -= 1000
+                } else {
+                    delay = 0
+                }
                 endLog()
                 break@retry
             } catch (e: ClassCastException) {
