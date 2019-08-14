@@ -136,6 +136,10 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
         val qDelete = session.prepare(deleteQuery)
         val qHeatmap = session.prepare(countQuery)
 
+        GlobalScope.launch {
+            fileWaitGroup.startRunner()
+        }
+
         install(Compression) {
             gzip {
                 priority = 1.0
