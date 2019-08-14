@@ -2,6 +2,7 @@ package io.marauder.tank
 
 import com.datastax.driver.core.LocalDate
 import com.datastax.driver.core.Session
+import com.datastax.driver.core.exceptions.OperationTimedOutException
 import com.datastax.driver.core.exceptions.QueryExecutionException
 import io.marauder.charged.Projector
 import io.marauder.charged.models.Feature
@@ -155,7 +156,11 @@ class Tyler(
             } catch (e: QueryExecutionException) {
                 log.warn("Increasing query execution delay due high DB usage (now at $delay ms, cause ${e.message})")
                 delay += delay + 1000
+            } catch (e: OperationTimedOutException) {
+                log.warn("Increasing query execution delay due high DB usage (now at $delay ms, cause ${e.message})")
+                delay += delay + 1000
             }
+
         } while (true)
     }
 

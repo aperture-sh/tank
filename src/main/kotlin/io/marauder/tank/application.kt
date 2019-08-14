@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory
 import com.datastax.driver.core.ConsistencyLevel
 import com.datastax.driver.core.LocalDate
 import com.datastax.driver.core.QueryOptions
+import com.datastax.driver.core.exceptions.OperationTimedOutException
 import com.datastax.driver.core.exceptions.QueryExecutionException
 import com.google.gson.Gson
 import io.ktor.util.KtorExperimentalAPI
@@ -474,6 +475,10 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                 }
 
                 exception<QueryExecutionException> {
+                    call.respondText(status = HttpStatusCode.InternalServerError, text = "{\"msg\": \"Database busy, try later\"}", contentType = ContentType.Application.Json)
+                }
+
+                exception<OperationTimedOutException> {
                     call.respondText(status = HttpStatusCode.InternalServerError, text = "{\"msg\": \"Database busy, try later\"}", contentType = ContentType.Application.Json)
                 }
             }
