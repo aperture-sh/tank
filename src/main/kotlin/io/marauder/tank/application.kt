@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory
 import com.datastax.driver.core.ConsistencyLevel
 import com.datastax.driver.core.LocalDate
 import com.datastax.driver.core.QueryOptions
+import com.datastax.driver.core.exceptions.QueryExecutionException
 import com.google.gson.Gson
 import io.ktor.util.KtorExperimentalAPI
 import java.io.File
@@ -465,13 +466,16 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
 
             install(StatusPages) {
                 exception<OutOfMemoryError> {
-                    call.respond(status = HttpStatusCode.InternalServerError, message = "Out of memory: reduce file/bulk size")
+                    call.respondText(status = HttpStatusCode.InternalServerError, text = "{\"msg\": \"Out of memory: reduce file/bulk size\"}", contentType = ContentType.Application.Json)
                 }
 
                 exception<JsonParsingException> {
-                    call.respond(status = HttpStatusCode.InternalServerError, message = "Json Parsing Issue: Check file format")
+                    call.respondText(status = HttpStatusCode.InternalServerError, text = "{\"msg\": \"Json Parsing Issue: Check file format\"}", contentType = ContentType.Application.Json)
                 }
 
+                exception<QueryExecutionException> {
+                    call.respondText(status = HttpStatusCode.InternalServerError, text = "{\"msg\": \"Database busy, try later\"}", contentType = ContentType.Application.Json)
+                }
             }
         }
     }
