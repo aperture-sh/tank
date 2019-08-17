@@ -4,6 +4,7 @@ import io.marauder.charged.models.Feature
 import kotlinx.coroutines.*
 import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlinx.serialization.json.JSON
+import kotlinx.serialization.json.JsonParsingException
 import org.slf4j.LoggerFactory
 import java.io.BufferedReader
 import java.io.File
@@ -28,16 +29,20 @@ class FileWaitGroup(private val tyler: Tyler, private val tmpDir : String) {
 
                         val reader = tmpFile.bufferedReader()
                         readline@while (true) {
-                            suspend fun suspendReadLine(reader: BufferedReader) =
-                                    withContext(Dispatchers.IO) {
-                                        reader.readLine()
-                                    }
+                            try {
+                                suspend fun suspendReadLine(reader: BufferedReader) =
+                                        withContext(Dispatchers.IO) {
+                                            reader.readLine()
+                                        }
 
-                            val line = suspendReadLine(reader) ?: break@readline
-                            val feature = JSON.plain.parse(Feature.serializer(), line)
-                            tyler.import(feature)
-                            count += 1
-                            if (count % 1000 == 0) log.info("1000 features imported")
+                                val line = suspendReadLine(reader) ?: break@readline
+                                val feature = JSON.plain.parse(Feature.serializer(), line)
+                                tyler.import(feature)
+                                count += 1
+                                if (count % 1000 == 0) log.info("1000 features imported")
+                            } catch (e: JsonParsingException) {
+                                log.warn("Feature dismissed due JSON parsing exception: ${e.message}")
+                            }
                         }
 
                     }
