@@ -1,5 +1,5 @@
 # Tank
-[![Apache License, Version 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0) [![Build Status](https://travis-ci.org/marauder-io/tank.svg?branch=master)](https://travis-ci.org/marauder-io/tank) ![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/maraud3r/tank)
+[![Apache License, Version 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0) [![Build Status](https://travis-ci.org/marauder-io/tank.svg?branch=master)](https://travis-ci.org/marauder-io/tank) [![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/maraud3r/tank)](https://hub.docker.com/r/maraud3r/tank)
 
 ## Visualization Focused Database
 
@@ -16,7 +16,7 @@ Connecting to DB is possible using the cqshl:
 ### Quick Start
 
 The `TANK_DB_HOSTS` variable is a comma-separated host list  
-`docker run --name tank -d -p 8888:8888 -e TANK_DB_HOSTS=cassandra --link cassandra tank`
+`docker run --name tank -d -p 8888:8888 -e TANK_DB_HOSTS=cassandra --link cassandra maraud3r/tank:latest`
 
 ### REST API
 
