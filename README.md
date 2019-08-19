@@ -1,4 +1,5 @@
 # Tank
+[![Apache License, Version 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0) [![Build Status](https://travis-ci.org/marauder-io/tank.svg?branch=master)](https://travis-ci.org/marauder-io/tank) ![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/maraud3r/tank)
 
 ## Visualization Focused Database
 
@@ -41,3 +42,15 @@ Adding `-config=resources/application.conf` can be used to specify another confi
 * `geometry` is a reserved field. One is not allowed to use it as a attribute field in the configuration.
 * `timestamp` is a reserved field. One is not allowed to use it for other purposes than storing the current timestamp.
 * `hash` and `uid` are reserved fields to. These are the mandatory partition key fields
+
+License
+-------
+
+Tank is licensed under the
+[Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
