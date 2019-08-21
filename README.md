@@ -1,5 +1,5 @@
 # Tank
-[![Apache License, Version 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0) [![Build Status](https://travis-ci.org/marauder-io/tank.svg?branch=master)](https://travis-ci.org/marauder-io/tank) [![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/maraud3r/tank)](https://hub.docker.com/r/maraud3r/tank)
+[![Apache License, Version 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0) [![Build Status](https://travis-ci.org/aperture-sh/tank.svg?branch=master)](https://travis-ci.org/aperture-sh/tank) [![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/ap3rture/tank)](https://hub.docker.com/r/ap3rture/tank)
 
 ## Visualization Focused Database
 
@@ -9,14 +9,14 @@ The tank stores geospatial data in a distributed way. The main endpoint provides
 
 ### Prerequisites
 Run a Cassandra instance:  
-`docker run --name cassandra -d  -p 9042:9042 maraud3r/cassandra-lucene:latest`  
+`docker run --name cassandra -d  -p 9042:9042 ap3rture/cassandra-lucene:latest`  
 Connecting to DB is possible using the cqshl:  
 `docker run -it --link cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR"'`
 
 ### Quick Start
 
 The `TANK_DB_HOSTS` variable is a comma-separated host list  
-`docker run --name tank -d -p 8888:8888 -e TANK_DB_HOSTS=cassandra --link cassandra maraud3r/tank:latest`
+`docker run --name tank -d -p 8888:8888 -e TANK_DB_HOSTS=cassandra --link cassandra ap3rture/tank:latest`
 
 ### REST API
 
