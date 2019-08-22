@@ -14,7 +14,8 @@ The easiest way to get a tank instance including the [Navigator UI](https://gith
 
 #### Docker Compose
 
-Run `docker-compose up`.
+* Run `docker-compose up`.
+* UI should be reachable: `http://localhost:8081/navigator/`
 
 #### Docker 
 * Notice prerequisites
