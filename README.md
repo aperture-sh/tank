@@ -48,6 +48,10 @@ If `add_timestamp` is set to `true`, a timestamp field has to be set (as it is b
 
 Adding `-config=resources/application.conf` can be used to specify another configuration file.
 
+### Deployment
+
+For production environments see our provisioning scripts using [Ansible](https://github.com/aperture-sh/tank-ansible) and [Terraform](https://github.com/aperture-sh/tank-terraform).
+
 #### Hints
 
 * For now there are no additional indices build for doing queries on other field than geometry and the partition keys.
