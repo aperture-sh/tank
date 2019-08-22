@@ -10,12 +10,32 @@ services:
     image: ap3rture/tank:latest
     environment:
       - TANK_DB_HOSTS=cassandra
+      - TANK_EXHAUSTER_ENABLED=true
+      - TANK_EXHAUSTER_HOST=exhauster
       - LOG_PATH=/app/logs
     volumes:
-    - tank_log:/app/logs
+      - tank_log:/app/logs
     ports:
-    - '8888:8888'
+      - '8888:8888'
+
+  mongo:
+    image: mongo:latest
+    volumes:
+      - mongo_data:/data/db
+
+  exhauster:
+    image: ap3rture/exhauster:latest
+    environment:
+      - EXHAUSTER_MONGO_HOST=mongo
+    ports:
+      - 8080:8080
+
+  navigator:
+    image: ap3rture/navigator:latest
+    ports:
+      - 8081:80
 
 volumes:
   cassandra_data:
   tank_log:
+  mongo_data:

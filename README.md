@@ -7,16 +7,24 @@ The tank stores geospatial data in a highly distributed way. Also building tiles
 
 `application.kt` contains the main module to start the server application.
 
+
+### Quick Start
+
+The easiest way to get a tank instance including the [Navigator UI](https://github.com/aperture-sh/navigator) and the [Exhauster](https://github.com/aperture-sh/exhauster) running is our `docker-compose.yml` file.
+
+#### Docker Compose
+
+Run `docker-compose up`.
+
+#### Docker 
+* Notice prerequisites
+* Run `docker run --name tank -d -p 8888:8888 -e TANK_DB_HOSTS=cassandra --link cassandra ap3rture/tank:latest`
+
 ### Prerequisites
 Run a Cassandra instance:  
 `docker run --name cassandra -d  -p 9042:9042 ap3rture/cassandra-lucene:latest`  
 Connecting to DB is possible using the cqshl:  
 `docker run -it --link cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR"'`
-
-### Quick Start
-
-The `TANK_DB_HOSTS` variable is a comma-separated host list  
-`docker run --name tank -d -p 8888:8888 -e TANK_DB_HOSTS=cassandra --link cassandra ap3rture/tank:latest`
 
 ### REST API
 
