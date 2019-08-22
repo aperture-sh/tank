@@ -30,8 +30,11 @@ Connecting to DB is possible using the cqshl:
 ### REST API
 
 `GET /` - Print Tank info message  
+`GET /:uuid` - Receive one specific feature in GeoJSON format
+`DELETE /:uuid` - Delete one specific feature
 `POST /:layer?` accepts GeoJSON features separated by line to import, `geojson=true` indicates to import a GeoJSON file, the layer parameter is not used at the current release  
-`GET /tile/z/x/y` - Request a tile, put `filter={"main_attr": "test"}` to filter the main attribute  
+`GET /tile/:z/:x/:y` - Request a tile, put `filter={"main_attr": "test"}` to filter the main attribute  
+`GET /heatmap/:z/:x/:y` -  Request a heatmap, will be served in vector tile format, the granularity can be configured on startup
 `GET /static/index.html` - Simple mapping interface for data exploration
 
 ### Configuration
