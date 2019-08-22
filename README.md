@@ -3,7 +3,7 @@
 
 ## Visualization Focused Database
 
-The tank stores geospatial data in a distributed way. The main endpoint provides 
+The tank stores geospatial data in a highly distributed way. Also building tiles benefits from fetching data using loads of queries from many database nodes. 
 
 `application.kt` contains the main module to start the server application.
 

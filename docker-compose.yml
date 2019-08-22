@@ -2,12 +2,12 @@ version: '3'
 
 services:
   cassandra:
-    image: maraud3r/cassandra-lucene:latest
+    image: ap3rture/cassandra-lucene:latest
     volumes:
     - cassandra_data:/var/lib/cassandra
 
   tank:
-    image: geocode.igd.fraunhofer.de:4567/marauder/tank:latest
+    image: ap3rture/tank:latest
     environment:
       - TANK_DB_HOSTS=cassandra
       - LOG_PATH=/app/logs
