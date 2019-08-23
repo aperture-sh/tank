@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory
 import java.util.*
 
 @ImplicitReflectionSerializer
-class Exhauster(private val host: String, private val port: Int) {
+class Exhauster(private val host: String, private val port: Int, private val path: String = "exhauster") {
 
     val http = HttpClient(Apache) {
         engine {
@@ -31,7 +31,7 @@ class Exhauster(private val host: String, private val port: Int) {
                 geometry = f.geometry,
                 properties = f.properties
         )
-        val call = http.call(urlString = "http://$host:$port/") {
+        val call = http.call(urlString = "http://$host:$port/$path") {
             method = HttpMethod.Post
             body = JSON.plain.stringify(tmp)
             header("ContentType", "application/json")
