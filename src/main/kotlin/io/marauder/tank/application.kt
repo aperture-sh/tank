@@ -175,6 +175,10 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
 
         install(DefaultHeaders) {
             header("X-Engine", "Ktor")
+            header("Access-Control-Allow-Origin", "*")
+            header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE")
+            header("Access-Control-Allow-Headers", "X-Engine,DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range")
+            header("Access-Control-Expose-Headers", "Content-Length,Content-Range")
         }
 
 
