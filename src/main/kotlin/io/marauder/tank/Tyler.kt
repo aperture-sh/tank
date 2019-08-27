@@ -12,8 +12,11 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.ImplicitReflectionSerializer
+import net.spy.memcached.MemcachedClient
 import org.slf4j.LoggerFactory
 import java.lang.ClassCastException
+import java.net.InetSocketAddress
+import java.util.concurrent.TimeUnit
 import java.util.*
 
 @ImplicitReflectionSerializer
@@ -32,6 +35,8 @@ class Tyler(
     """.trimIndent())
 
     private val projector = Projector()
+
+    private val mcc = MemcachedClient(InetSocketAddress("127.0.0.1", 11211))
 
     private var delay = 0L
 
@@ -125,6 +130,14 @@ class Tyler(
                 bound.setUUID("uid", uuid)
 
                 endLog()
+
+                val startTime = System.nanoTime()
+                invalCache_td(f.geometry.toJTS())
+                //incvalCache_cv(f.geometry.toJTS())
+                //invalCache_tq(f.geometry.toJTS())
+                val duration = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime)
+                log.info("$duration ms")
+
                 endLog = marker.startLogDuration("store geometry to database")
                 delay(delay)
                 session.execute(bound)
@@ -167,6 +180,98 @@ class Tyler(
     companion object {
         private val log = LoggerFactory.getLogger(Tyler::class.java)
         private val marker = Benchmark(log)
+    }
+
+    /**
+     * Top-Down
+     */
+    private fun invalCache_td(geo : org.locationtech.jts.geom.Geometry) {
+        val tileLookUp = ArrayList<Tile>()
+
+        tileLookUp.add(Tile(0,0,0))
+
+        while(tileLookUp.isNotEmpty()) {
+            if(tileLookUp[0].z <= 21) {
+                if(tileLookUp[0].getGeometry().intersects(geo)) {
+                    tileLookUp.addAll(tileLookUp[0].getChildren())
+                    removeTile(tileLookUp[0])
+                }
+            }
+            tileLookUp.removeAt(0);
+        }
+
+    }
+
+
+    /**
+     * Covering
+     */
+    private fun incvalCache_cv(geo : org.locationtech.jts.geom.Geometry) {
+        val tileLookUp = ArrayList<Tile>()
+        val mcc = MemcachedClient(InetSocketAddress("127.0.0.1", 11211))
+
+        tileLookUp.add(Tile(0,0,0))
+
+        while(tileLookUp.isNotEmpty()) {
+            if(tileLookUp[0].z <= 21) {
+                if(tileLookUp[0].getGeometry().coveredBy(geo)) {
+                    invalCacheAllChildren(tileLookUp[0])
+                }
+
+                else if(tileLookUp[0].getGeometry().intersects(geo)) {
+                    tileLookUp.addAll(tileLookUp[0].getChildren())
+                    removeTile(tileLookUp[0])
+                }
+            }
+            tileLookUp.removeAt(0);
+        }
+    }
+
+
+    /**
+     * ThreeQuarters
+     */
+    private fun invalCache_tq(geo : org.locationtech.jts.geom.Geometry) {
+        val tileLookUp = ArrayList<Tile>()
+        val mcc = MemcachedClient(InetSocketAddress("127.0.0.1", 11211))
+
+        tileLookUp.add(Tile(0,0,0))
+
+        while(tileLookUp.isNotEmpty()) {
+            if(tileLookUp[0].z <= 21) {
+                if(tileLookUp[0].getGeometry().coveredBy(geo) ||
+                                tileLookUp[0].getIntersection(geo) > 0.75
+                        ) {
+                    invalCacheAllChildren(tileLookUp[0])
+                }
+
+                else if(tileLookUp[0].getGeometry().intersects(geo)) {
+                    tileLookUp.addAll(tileLookUp[0].getChildren())
+                    removeTile(tileLookUp[0])
+                }
+            }
+            tileLookUp.removeAt(0);
+        }
+    }
+
+    private fun invalCacheAllChildren(t : Tile) {
+        val queue = ArrayList<Tile>()
+
+        queue.add(t);
+
+        while(queue.isNotEmpty()) {
+            if(queue[0].z < 21) {
+                queue.addAll(queue[0].getChildren())
+            }
+            removeTile(queue[0])
+            queue.removeAt(0);
+        }
+    }
+
+    private fun removeTile(t : Tile) {
+        mcc.delete("heatmap/" + t.z + "/" + t.x + "/" + t.y)
+        mcc.delete("tile/" + t.z + "/" + t.x + "/" + t.y)
+        log.info("delete: tile/" + t.z + "/" + t.x + "/" + t.y)
     }
 
 }
