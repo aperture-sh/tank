@@ -64,6 +64,8 @@ dependencies {
     compile group: 'ch.qos.logback', name: 'logback-core', version: '1.2.3'
     compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
 
+    compile group: 'net.spy', name: 'spymemcached', version: '2.12.3'
+
     testCompile "io.ktor:ktor-server-tests:$ktor_version"
     testCompile "io.ktor:ktor-server-core:$ktor_version"
     testCompile "io.ktor:ktor-server-host-common:$ktor_version"
