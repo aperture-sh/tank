@@ -197,7 +197,7 @@ class Tyler(
                     removeTile(tileLookUp[0])
                 }
             }
-            tileLookUp.removeAt(0);
+            tileLookUp.removeAt(0)
         }
 
     }
@@ -223,7 +223,7 @@ class Tyler(
                     removeTile(tileLookUp[0])
                 }
             }
-            tileLookUp.removeAt(0);
+            tileLookUp.removeAt(0)
         }
     }
 
@@ -250,7 +250,7 @@ class Tyler(
                     removeTile(tileLookUp[0])
                 }
             }
-            tileLookUp.removeAt(0);
+            tileLookUp.removeAt(0)
         }
     }
 
@@ -264,7 +264,7 @@ class Tyler(
                 queue.addAll(queue[0].getChildren())
             }
             removeTile(queue[0])
-            queue.removeAt(0);
+            queue.removeAt(0)
         }
     }
 

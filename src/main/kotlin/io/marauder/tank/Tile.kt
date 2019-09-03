@@ -1,13 +1,14 @@
 package io.marauder.tank
 
-import net.spy.memcached.transcoders.Transcoder;
-import net.spy.memcached.CachedData;
-import org.locationtech.jts.geom.GeometryFactory;
-import org.locationtech.jts.geom.Polygon;
-import org.locationtech.jts.geom.Coordinate;
-import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.geom.GeometryFactory
+import org.locationtech.jts.geom.Polygon
+import org.locationtech.jts.geom.Coordinate
+import org.locationtech.jts.geom.Geometry
+import java.lang.Math.toDegrees
 import java.util.ArrayList
-
+import kotlin.math.atan
+import kotlin.math.pow
+import kotlin.math.sinh
 
 
 class Tile (val x: Int, val y: Int, val z: Int){
@@ -38,21 +39,21 @@ class Tile (val x: Int, val y: Int, val z: Int){
     }
 
     fun getGeometry(): Geometry {
-        return poly;
+        return poly
     }
 
     private fun tile2lon(x: Int, z: Int): Double {
-        return x.toDouble() / Math.pow(2.0, z.toDouble()) * 360.0 - 180.0
+        return x.toDouble() / 2.0.pow(z.toDouble()) * 360.0 - 180.0
     }
 
     private fun tile2lat(y: Int, z: Int): Double {
-        val n = Math.PI - 2.0 * Math.PI * y.toDouble() / Math.pow(2.0, z.toDouble())
-        return Math.toDegrees(Math.atan(Math.sinh(n)))
+        val n = Math.PI - 2.0 * Math.PI * y.toDouble() / 2.0.pow(z.toDouble())
+        return toDegrees(atan(sinh(n)))
     }
 
     fun getIntersection(geo: Geometry): Double {
         val intersect = geo.intersection(poly)
-        return intersect.area / poly.getArea()
+        return intersect.area / poly.area
     }
 
 }
