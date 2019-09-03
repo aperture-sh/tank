@@ -15,7 +15,6 @@ import kotlinx.serialization.ImplicitReflectionSerializer
 import net.spy.memcached.MemcachedClient
 import org.slf4j.LoggerFactory
 import java.lang.ClassCastException
-import java.net.InetSocketAddress
 import java.util.concurrent.TimeUnit
 import java.util.*
 
@@ -26,7 +25,9 @@ class Tyler(
         addTimeStamp: Boolean = true,
         private val attrFields: List<String>,
         private val hashLevel: Int,
-        private val exhauster: Exhauster?) {
+        private val exhauster: Exhauster?,
+        private val mcc : MemcachedClient
+) {
 
     private val attributes = attrFields.map { it.split(" ").first() }
     private val q = session.prepare("""
@@ -35,8 +36,6 @@ class Tyler(
     """.trimIndent())
 
     private val projector = Projector()
-
-    private val mcc = MemcachedClient(InetSocketAddress("127.0.0.1", 11211))
 
     private var delay = 0L
 
@@ -208,7 +207,6 @@ class Tyler(
      */
     private fun incvalCache_cv(geo : org.locationtech.jts.geom.Geometry) {
         val tileLookUp = ArrayList<Tile>()
-        val mcc = MemcachedClient(InetSocketAddress("127.0.0.1", 11211))
 
         tileLookUp.add(Tile(0,0,0))
 
@@ -233,7 +231,6 @@ class Tyler(
      */
     private fun invalCache_tq(geo : org.locationtech.jts.geom.Geometry) {
         val tileLookUp = ArrayList<Tile>()
-        val mcc = MemcachedClient(InetSocketAddress("127.0.0.1", 11211))
 
         tileLookUp.add(Tile(0,0,0))
 

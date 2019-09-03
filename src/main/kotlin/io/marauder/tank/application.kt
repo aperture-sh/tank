@@ -9,7 +9,6 @@ import io.ktor.routing.*
 import io.ktor.http.*
 import io.ktor.features.*
 import org.slf4j.event.*
-import java.time.*
 import io.ktor.http.content.resources
 import io.ktor.http.content.static
 import io.ktor.util.InternalAPI
@@ -38,7 +37,6 @@ import java.io.File
 import java.lang.Exception
 import java.util.UUID
 
-import net.spy.memcached.transcoders.Transcoder
 import net.spy.memcached.MemcachedClient
 import java.net.InetSocketAddress
 
@@ -87,6 +85,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
         val zoomLevelStart = environment.config.propertyOrNull("ktor.application.chache_zoomlevel_start")?.getString()?.toInt() ?: 2
         val zoomLevelEnd = environment.config.propertyOrNull("ktor.application.chache_zoomlevel_end")?.getString()?.toInt() ?: 15
+        val memchachedClientHost = environment.config.propertyOrNull("ktor.application.memcached_client_host")?.getString() ?: "127.0.0.1"
+        val memchachedClientPort = environment.config.propertyOrNull("ktor.application.memcached_client_port")?.getString()?.toInt() ?: 11211
 
         val typeMap = attrFields.map { attr ->
             val (name, type) = attr.split(" ")
@@ -122,10 +122,14 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
             }
         }
 
+
+        val mcc = MemcachedClient(InetSocketAddress(memchachedClientHost, memchachedClientPort))
+        val tt = TileTranscoder()
+
         val cluster = clusterBuilder.build()
         val session = cluster.connect(dbKeyspace)
         val exhauster = if (exhausterEnabled) Exhauster(exhausterHost, exhausterPort) else null
-        val tiler = Tyler(session, dbTable, addTimeStamp, attrFields, hashLevel, exhauster)
+        val tiler = Tyler(session, dbTable, addTimeStamp, attrFields, hashLevel, exhauster, mcc)
         val fileWaitGroup = FileWaitGroup(tiler, tmpDirectory)
         val projector = Projector()
 
@@ -160,9 +164,6 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
         val deleteOne = session.prepare(queryDeleteOne)
         val qDelete = session.prepare(deleteQuery)
         val qHeatmap = session.prepare(countQuery)
-
-        val mcc = MemcachedClient(InetSocketAddress("127.0.0.1", 11211))
-        val tt = TileTranscoder()
 
         GlobalScope.launch {
             fileWaitGroup.startRunner()
