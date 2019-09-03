@@ -131,9 +131,9 @@ class Tyler(
                 endLog()
 
                 val startTime = System.nanoTime()
-                invalCache_td(f.geometry.toJTS())
-                //incvalCache_cv(f.geometry.toJTS())
-                //invalCache_tq(f.geometry.toJTS())
+                invalidateCacheTD(f.geometry.toJTS())
+                //incvalCacheCV(f.geometry.toJTS())
+                //invalCacheTQ(f.geometry.toJTS())
                 val duration = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime)
                 log.info("$duration ms")
 
@@ -184,7 +184,7 @@ class Tyler(
     /**
      * Top-Down
      */
-    private fun invalCache_td(geo : org.locationtech.jts.geom.Geometry) {
+    private fun invalidateCacheTD(geo : org.locationtech.jts.geom.Geometry) {
         val tileLookUp = ArrayList<Tile>()
 
         tileLookUp.add(Tile(0,0,0))
@@ -205,7 +205,7 @@ class Tyler(
     /**
      * Covering
      */
-    private fun incvalCache_cv(geo : org.locationtech.jts.geom.Geometry) {
+    private fun incvalCacheCV(geo : org.locationtech.jts.geom.Geometry) {
         val tileLookUp = ArrayList<Tile>()
 
         tileLookUp.add(Tile(0,0,0))
@@ -229,7 +229,7 @@ class Tyler(
     /**
      * ThreeQuarters
      */
-    private fun invalCache_tq(geo : org.locationtech.jts.geom.Geometry) {
+    private fun invalCacheTQ(geo : org.locationtech.jts.geom.Geometry) {
         val tileLookUp = ArrayList<Tile>()
 
         tileLookUp.add(Tile(0,0,0))

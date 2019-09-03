@@ -41,7 +41,7 @@ import net.spy.memcached.MemcachedClient
 import java.net.InetSocketAddress
 
 
-fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
+fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
 
 
     @KtorExperimentalAPI
