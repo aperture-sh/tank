@@ -38,6 +38,7 @@ import java.lang.Exception
 import java.util.UUID
 
 import net.spy.memcached.MemcachedClient
+import java.net.ConnectException
 import java.net.InetSocketAddress
 
 
@@ -122,8 +123,11 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
             }
         }
 
+        var mcc:MemcachedClient?
 
-        val mcc = MemcachedClient(InetSocketAddress(memchachedClientHost, memchachedClientPort))
+        try {
+            mcc = MemcachedClient(InetSocketAddress(memchachedClientHost, memchachedClientPort))
+        } catch (e: ConnectException) { mcc = null}
         val tt = TileTranscoder()
 
         val cluster = clusterBuilder.build()
@@ -287,7 +291,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                     val y = call.parameters["y"]?.toInt() ?: -1
 
 
-                    val cacheTile = if(z in zoomLevelStart..zoomLevelEnd) mcc.get("tile/$z/$x/$y", tt) else null
+                    val cacheTile = if(z in zoomLevelStart..zoomLevelEnd) mcc?.get("tile/$z/$x/$y", tt) else null
 
                     if(cacheTile != null) {
                         call.respondBytes(cacheTile)
@@ -399,7 +403,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
 
                         call.respondBytes(encoded.toByteArray())
 
-                        if(z in zoomLevelStart..zoomLevelEnd)
+                        if(mcc != null && z in zoomLevelStart..zoomLevelEnd)
                             mcc.set("tile/$z/$x/$y", 10000, encoded.toByteArray(), tt)
 
                     }
@@ -458,7 +462,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                     val y = call.parameters["y"]?.toInt() ?: -1
 
 
-                val cacheTile = if(z in zoomLevelStart..zoomLevelEnd) mcc.get("heatmap/$z/$x/$y", tt) else null
+                val cacheTile = if(z in zoomLevelStart..zoomLevelEnd) mcc?.get("heatmap/$z/$x/$y", tt) else null
 
                 if(cacheTile != null) {
                     call.respondBytes(cacheTile)
@@ -542,7 +546,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
 
                     call.respondBytes(encoded.toByteArray())
 
-                    if(z in zoomLevelStart..zoomLevelEnd)
+                    if(mcc != null && z in zoomLevelStart..zoomLevelEnd)
                         mcc.set("heatmap/$z/$x/$y", 10000, encoded.toByteArray(), tt)
                 }
             }
