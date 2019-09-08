@@ -26,7 +26,7 @@ class Tyler(
         private val attrFields: List<String>,
         private val hashLevel: Int,
         private val exhauster: Exhauster?,
-        private val mcc : MemcachedClient
+        private val mcc : MemcachedClient?
 ) {
 
     private val attributes = attrFields.map { it.split(" ").first() }
@@ -254,7 +254,7 @@ class Tyler(
     private fun invalCacheAllChildren(t : Tile) {
         val queue = ArrayList<Tile>()
 
-        queue.add(t);
+        queue.add(t)
 
         while(queue.isNotEmpty()) {
             if(queue[0].z < 21) {
@@ -266,8 +266,8 @@ class Tyler(
     }
 
     private fun removeTile(t : Tile) {
-        mcc.delete("heatmap/" + t.z + "/" + t.x + "/" + t.y)
-        mcc.delete("tile/" + t.z + "/" + t.x + "/" + t.y)
+        mcc?.delete("heatmap/" + t.z + "/" + t.x + "/" + t.y)
+        mcc?.delete("tile/" + t.z + "/" + t.x + "/" + t.y)
         log.info("delete: tile/" + t.z + "/" + t.x + "/" + t.y)
     }
 
