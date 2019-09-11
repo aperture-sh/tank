@@ -10,10 +10,14 @@ jobs:
   build:
  
     runs-on: ubuntu-latest
- 
+
     steps:
     - uses: actions/checkout@v1
     - name: Build the Docker image
       run: docker build . --file Dockerfile --tag docker.pkg.github.com/aperture-sh/tank/tank:latest
+    - name: Docker Login
+      run: echo "$GITHUB_TOKEN" | docker login docker.pkg.github.com -u f7o --password-stdin
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Push to Github
       run: docker push docker.pkg.github.com/aperture-sh/tank/tank:latest
