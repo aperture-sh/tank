@@ -15,3 +15,5 @@ jobs:
     - uses: actions/checkout@v1
     - name: Build the Docker image
       run: docker build . --file Dockerfile --tag docker.pkg.github.com/aperture-sh/tank/tank:latest
+    - name: Push to Github
+      run: docker push docker.pkg.github.com/aperture-sh/tank/tank:latest
