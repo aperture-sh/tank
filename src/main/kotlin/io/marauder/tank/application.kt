@@ -526,12 +526,12 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                         call.respondText(status = HttpStatusCode.InternalServerError, text = "{\"msg\": \"Json Parsing Issue: Check file format\"}", contentType = ContentType.Application.Json)
                     }
 
-                    exception<QueryExecutionException> {
-                        call.respondText(status = HttpStatusCode.InternalServerError, text = "{\"msg\": \"Database busy, try later\"}", contentType = ContentType.Application.Json)
+                    exception<QueryExecutionException> { cause ->
+                        call.respondText(status = HttpStatusCode.InternalServerError, text = "{\"msg\": \"Database busy, try later\", \"cause\": \"${cause.message}\"}", contentType = ContentType.Application.Json)
                     }
 
-                    exception<OperationTimedOutException> {
-                        call.respondText(status = HttpStatusCode.InternalServerError, text = "{\"msg\": \"Database busy, try later\"}", contentType = ContentType.Application.Json)
+                    exception<OperationTimedOutException> { cause ->
+                        call.respondText(status = HttpStatusCode.InternalServerError, text = "{\"msg\": \"Database busy, try later\", \"cause\": \"${cause.message}\"}", contentType = ContentType.Application.Json)
                     }
 
                     exception<NotImplementedError> {
