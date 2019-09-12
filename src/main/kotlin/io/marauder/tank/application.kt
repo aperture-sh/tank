@@ -184,6 +184,10 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
 
         routing {
             route(prefix) {
+                options("*") {
+                    call.respondText("", contentType = ContentType.Text.Plain, status = HttpStatusCode.NoContent)
+                }
+
                 options("/") {
                     call.respondText("", contentType = ContentType.Text.Plain, status = HttpStatusCode.NoContent)
                 }
