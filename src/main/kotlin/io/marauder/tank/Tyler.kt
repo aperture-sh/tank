@@ -7,6 +7,7 @@ import com.datastax.driver.core.exceptions.QueryExecutionException
 import io.marauder.charged.Projector
 import io.marauder.charged.models.Feature
 import io.marauder.charged.models.GeoJSON
+import io.marauder.charged.models.Geometry
 import io.marauder.charged.models.Value
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
@@ -131,9 +132,9 @@ class Tyler(
                 endLog()
 
                 val startTime = System.nanoTime()
-                invalidateCacheTD(f.geometry.toJTS())
-                //incvalCacheCV(f.geometry.toJTS())
-                //invalCacheTQ(f.geometry.toJTS())
+                invalidateCacheTD(f.geometry)
+                //incvalCacheCV(f.geometry)
+                //invalCacheTQ(f.geometry)
                 val duration = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime)
                 log.info("$duration ms")
 
@@ -184,14 +185,14 @@ class Tyler(
     /**
      * Top-Down
      */
-    private fun invalidateCacheTD(geo : org.locationtech.jts.geom.Geometry) {
+    private fun invalidateCacheTD(geo : Geometry) {
         val tileLookUp = ArrayList<Tile>()
 
         tileLookUp.add(Tile(0,0,0))
 
         while(tileLookUp.isNotEmpty()) {
             if(tileLookUp[0].z <= 21) {
-                if(tileLookUp[0].getGeometry().intersects(geo)) {
+                if(tileLookUp[0].getGeometry().toJTS().intersects(geo.toJTS())) {
                     tileLookUp.addAll(tileLookUp[0].getChildren())
                     removeTile(tileLookUp[0])
                 }
@@ -205,18 +206,18 @@ class Tyler(
     /**
      * Covering
      */
-    private fun incvalCacheCV(geo : org.locationtech.jts.geom.Geometry) {
+    private fun incvalCacheCV(geo : Geometry) {
         val tileLookUp = ArrayList<Tile>()
 
         tileLookUp.add(Tile(0,0,0))
 
         while(tileLookUp.isNotEmpty()) {
             if(tileLookUp[0].z <= 21) {
-                if(tileLookUp[0].getGeometry().coveredBy(geo)) {
+                if(tileLookUp[0].getGeometry().toJTS().coveredBy(geo.toJTS())) {
                     invalCacheAllChildren(tileLookUp[0])
                 }
 
-                else if(tileLookUp[0].getGeometry().intersects(geo)) {
+                else if(tileLookUp[0].getGeometry().toJTS().intersects(geo.toJTS())) {
                     tileLookUp.addAll(tileLookUp[0].getChildren())
                     removeTile(tileLookUp[0])
                 }
@@ -229,20 +230,20 @@ class Tyler(
     /**
      * ThreeQuarters
      */
-    private fun invalCacheTQ(geo : org.locationtech.jts.geom.Geometry) {
+    private fun invalCacheTQ(geo : Geometry) {
         val tileLookUp = ArrayList<Tile>()
 
         tileLookUp.add(Tile(0,0,0))
 
         while(tileLookUp.isNotEmpty()) {
             if(tileLookUp[0].z <= 21) {
-                if(tileLookUp[0].getGeometry().coveredBy(geo) ||
+                if(tileLookUp[0].getGeometry().toJTS().coveredBy(geo.toJTS()) ||
                                 tileLookUp[0].getIntersection(geo) > 0.75
                         ) {
                     invalCacheAllChildren(tileLookUp[0])
                 }
 
-                else if(tileLookUp[0].getGeometry().intersects(geo)) {
+                else if(tileLookUp[0].getGeometry().toJTS().intersects(geo.toJTS())) {
                     tileLookUp.addAll(tileLookUp[0].getChildren())
                     removeTile(tileLookUp[0])
                 }
@@ -268,7 +269,6 @@ class Tyler(
     private fun removeTile(t : Tile) {
         mcc?.delete("heatmap/" + t.z + "/" + t.x + "/" + t.y)
         mcc?.delete("tile/" + t.z + "/" + t.x + "/" + t.y)
-        log.info("delete: tile/" + t.z + "/" + t.x + "/" + t.y)
     }
 
 }
