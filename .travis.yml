@@ -3,7 +3,7 @@ services:
   - docker
 before_install:
   - './.travis/main.sh'
-  - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  - if [[ "$TRAVIS_PULL_REQUEST" == "false" ]]; then echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin; fi;
 env:
   global:
     - JAVA_OPTS="-Xmx512m"
