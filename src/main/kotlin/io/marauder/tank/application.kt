@@ -84,10 +84,11 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
         val exhausterPort = environment.config.propertyOrNull("ktor.application.exhauster.port")?.getString()?.toInt() ?: 8080
         val exhausterEnabled = environment.config.propertyOrNull("ktor.application.exhauster.enabled")?.getString()?.toBoolean() ?: false
 
-        val zoomLevelStart = environment.config.propertyOrNull("ktor.application.chache_zoomlevel_start")?.getString()?.toInt() ?: 2
-        val zoomLevelEnd = environment.config.propertyOrNull("ktor.application.chache_zoomlevel_end")?.getString()?.toInt() ?: 15
-        val memchachedClientHost = environment.config.propertyOrNull("ktor.application.memcached_client_host")?.getString() ?: "127.0.0.1"
-        val memchachedClientPort = environment.config.propertyOrNull("ktor.application.memcached_client_port")?.getString()?.toInt() ?: 11211
+        val zoomLevelStart = environment.config.propertyOrNull("ktor.application.cache_zoomlevel_start")?.getString()?.toInt() ?: 2
+        val zoomLevelEnd = environment.config.propertyOrNull("ktor.application.cache_zoomlevel_end")?.getString()?.toInt() ?: 15
+        val memcachedClientHost = environment.config.propertyOrNull("ktor.application.memcached_client_host")?.getString() ?: "127.0.0.1"
+        val memcachedClientPort = environment.config.propertyOrNull("ktor.application.memcached_client_port")?.getString()?.toInt() ?: 11211
+        var memcachedEnabled = environment.config.propertyOrNull("ktor.application.memcached_enabled")?.getString()?.toBoolean() ?: false
 
         val typeMap = attrFields.map { attr ->
             val (name, type) = attr.split(" ")
@@ -123,17 +124,21 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
             }
         }
 
-        var mcc:MemcachedClient?
-
-        try {
-            mcc = MemcachedClient(InetSocketAddress(memchachedClientHost, memchachedClientPort))
-        } catch (e: ConnectException) { mcc = null}
+        var mcc:MemcachedClient? = null
         val tt = TileTranscoder()
+
+        if(memcachedEnabled)
+            try {
+                mcc = MemcachedClient(InetSocketAddress(memcachedClientHost, memcachedClientPort))
+            } catch (e: ConnectException) {
+                memcachedEnabled = false
+            }
+
 
         val cluster = clusterBuilder.build()
         val session = cluster.connect(dbKeyspace)
         val exhauster = if (exhausterEnabled) Exhauster(exhausterHost, exhausterPort) else null
-        val tiler = Tyler(session, dbTable, addTimeStamp, attrFields, hashLevel, exhauster, mcc)
+        val tiler = Tyler(session, dbTable, addTimeStamp, attrFields, hashLevel, exhauster, memcachedEnabled, mcc)
         val fileWaitGroup = FileWaitGroup(tiler, tmpDirectory)
         val projector = Projector()
 
@@ -291,9 +296,9 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                     val y = call.parameters["y"]?.toInt() ?: -1
 
 
-                    val cacheTile = if(z in zoomLevelStart..zoomLevelEnd) mcc?.get("tile/$z/$x/$y", tt) else null
+                    val cacheTile = if(memcachedEnabled && z in zoomLevelStart..zoomLevelEnd) mcc?.get("tile/$z/$x/$y", tt) else null
 
-                    if(cacheTile != null) {
+                    if(memcachedEnabled && cacheTile != null) {
                         call.respondBytes(cacheTile)
                     }
                     else {
@@ -403,8 +408,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
 
                         call.respondBytes(encoded.toByteArray())
 
-                        if(mcc != null && z in zoomLevelStart..zoomLevelEnd)
-                            mcc.set("tile/$z/$x/$y", 10000, encoded.toByteArray(), tt)
+                        if(memcachedEnabled && z in zoomLevelStart..zoomLevelEnd)
+                            mcc?.set("tile/$z/$x/$y", 10000, encoded.toByteArray(), tt)
 
                     }
                     endLog()
@@ -462,7 +467,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                     val y = call.parameters["y"]?.toInt() ?: -1
 
 
-                val cacheTile = if(z in zoomLevelStart..zoomLevelEnd) mcc?.get("heatmap/$z/$x/$y", tt) else null
+                val cacheTile = if(memcachedEnabled && z in zoomLevelStart..zoomLevelEnd) mcc?.get("heatmap/$z/$x/$y", tt) else null
 
                 if(cacheTile != null) {
                     call.respondBytes(cacheTile)
@@ -546,8 +551,8 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
 
                     call.respondBytes(encoded.toByteArray())
 
-                    if(mcc != null && z in zoomLevelStart..zoomLevelEnd)
-                        mcc.set("heatmap/$z/$x/$y", 10000, encoded.toByteArray(), tt)
+                    if(memcachedEnabled && z in zoomLevelStart..zoomLevelEnd)
+                        mcc?.set("heatmap/$z/$x/$y", 10000, encoded.toByteArray(), tt)
                 }
             }
 

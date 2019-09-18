@@ -27,6 +27,7 @@ class Tyler(
         private val attrFields: List<String>,
         private val hashLevel: Int,
         private val exhauster: Exhauster?,
+        private val memcachedEnabled: Boolean = false,
         private val mcc : MemcachedClient?
 ) {
 
@@ -267,8 +268,10 @@ class Tyler(
     }
 
     private fun removeTile(t : Tile) {
-        mcc?.delete("heatmap/" + t.z + "/" + t.x + "/" + t.y)
-        mcc?.delete("tile/" + t.z + "/" + t.x + "/" + t.y)
+        if(memcachedEnabled) {
+            mcc?.delete("heatmap/" + t.z + "/" + t.x + "/" + t.y)
+            mcc?.delete("tile/" + t.z + "/" + t.x + "/" + t.y)
+        }
     }
 
 }
