@@ -7,13 +7,16 @@ import com.datastax.driver.core.exceptions.QueryExecutionException
 import io.marauder.charged.Projector
 import io.marauder.charged.models.Feature
 import io.marauder.charged.models.GeoJSON
+import io.marauder.charged.models.Geometry
 import io.marauder.charged.models.Value
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.ImplicitReflectionSerializer
+import net.spy.memcached.MemcachedClient
 import org.slf4j.LoggerFactory
 import java.lang.ClassCastException
+import java.util.concurrent.TimeUnit
 import java.util.*
 
 @ImplicitReflectionSerializer
@@ -23,7 +26,10 @@ class Tyler(
         addTimeStamp: Boolean = true,
         private val attrFields: List<String>,
         private val hashLevel: Int,
-        private val exhauster: Exhauster?) {
+        private val exhauster: Exhauster?,
+        private val memcachedEnabled: Boolean = false,
+        private val mcc : MemcachedClient?
+) {
 
     private val attributes = attrFields.map { it.split(" ").first() }
     private val q = session.prepare("""
@@ -125,6 +131,14 @@ class Tyler(
                 bound.setUUID("uid", uuid)
 
                 endLog()
+
+                val startTime = System.nanoTime()
+                invalidateCacheTD(f.geometry)
+                //incvalCacheCV(f.geometry)
+                //invalCacheTQ(f.geometry)
+                val duration = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime)
+                log.info("$duration ms")
+
                 endLog = marker.startLogDuration("store geometry to database")
                 delay(delay)
                 session.execute(bound)
@@ -167,6 +181,97 @@ class Tyler(
     companion object {
         private val log = LoggerFactory.getLogger(Tyler::class.java)
         private val marker = Benchmark(log)
+    }
+
+    /**
+     * Top-Down
+     */
+    private fun invalidateCacheTD(geo : Geometry) {
+        val tileLookUp = ArrayList<Tile>()
+
+        tileLookUp.add(Tile(0,0,0))
+
+        while(tileLookUp.isNotEmpty()) {
+            if(tileLookUp[0].z <= 21) {
+                if(tileLookUp[0].getGeometry().toJTS().intersects(geo.toJTS())) {
+                    tileLookUp.addAll(tileLookUp[0].getChildren())
+                    removeTile(tileLookUp[0])
+                }
+            }
+            tileLookUp.removeAt(0)
+        }
+
+    }
+
+
+    /**
+     * Covering
+     */
+    private fun incvalCacheCV(geo : Geometry) {
+        val tileLookUp = ArrayList<Tile>()
+
+        tileLookUp.add(Tile(0,0,0))
+
+        while(tileLookUp.isNotEmpty()) {
+            if(tileLookUp[0].z <= 21) {
+                if(tileLookUp[0].getGeometry().toJTS().coveredBy(geo.toJTS())) {
+                    invalCacheAllChildren(tileLookUp[0])
+                }
+
+                else if(tileLookUp[0].getGeometry().toJTS().intersects(geo.toJTS())) {
+                    tileLookUp.addAll(tileLookUp[0].getChildren())
+                    removeTile(tileLookUp[0])
+                }
+            }
+            tileLookUp.removeAt(0)
+        }
+    }
+
+
+    /**
+     * ThreeQuarters
+     */
+    private fun invalCacheTQ(geo : Geometry) {
+        val tileLookUp = ArrayList<Tile>()
+
+        tileLookUp.add(Tile(0,0,0))
+
+        while(tileLookUp.isNotEmpty()) {
+            if(tileLookUp[0].z <= 21) {
+                if(tileLookUp[0].getGeometry().toJTS().coveredBy(geo.toJTS()) ||
+                                tileLookUp[0].getIntersection(geo) > 0.75
+                        ) {
+                    invalCacheAllChildren(tileLookUp[0])
+                }
+
+                else if(tileLookUp[0].getGeometry().toJTS().intersects(geo.toJTS())) {
+                    tileLookUp.addAll(tileLookUp[0].getChildren())
+                    removeTile(tileLookUp[0])
+                }
+            }
+            tileLookUp.removeAt(0)
+        }
+    }
+
+    private fun invalCacheAllChildren(t : Tile) {
+        val queue = ArrayList<Tile>()
+
+        queue.add(t)
+
+        while(queue.isNotEmpty()) {
+            if(queue[0].z < 21) {
+                queue.addAll(queue[0].getChildren())
+            }
+            removeTile(queue[0])
+            queue.removeAt(0)
+        }
+    }
+
+    private fun removeTile(t : Tile) {
+        if(memcachedEnabled) {
+            mcc?.delete("heatmap/" + t.z + "/" + t.x + "/" + t.y)
+            mcc?.delete("tile/" + t.z + "/" + t.x + "/" + t.y)
+        }
     }
 
 }

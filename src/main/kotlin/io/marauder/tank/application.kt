@@ -9,7 +9,6 @@ import io.ktor.routing.*
 import io.ktor.http.*
 import io.ktor.features.*
 import org.slf4j.event.*
-import java.time.*
 import io.ktor.http.content.resources
 import io.ktor.http.content.static
 import io.ktor.util.InternalAPI
@@ -37,6 +36,10 @@ import kotlinx.serialization.stringify
 import java.io.File
 import java.lang.Exception
 import java.util.UUID
+
+import net.spy.memcached.MemcachedClient
+import java.net.ConnectException
+import java.net.InetSocketAddress
 
 
 fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
@@ -81,6 +84,12 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
         val exhausterPort = environment.config.propertyOrNull("ktor.application.exhauster.port")?.getString()?.toInt() ?: 8080
         val exhausterEnabled = environment.config.propertyOrNull("ktor.application.exhauster.enabled")?.getString()?.toBoolean() ?: false
 
+        val zoomLevelStart = environment.config.propertyOrNull("ktor.application.cache_zoomlevel_start")?.getString()?.toInt() ?: 2
+        val zoomLevelEnd = environment.config.propertyOrNull("ktor.application.cache_zoomlevel_end")?.getString()?.toInt() ?: 15
+        val memcachedClientHost = environment.config.propertyOrNull("ktor.application.memcached_client_host")?.getString() ?: "127.0.0.1"
+        val memcachedClientPort = environment.config.propertyOrNull("ktor.application.memcached_client_port")?.getString()?.toInt() ?: 11211
+        var memcachedEnabled = environment.config.propertyOrNull("ktor.application.memcached_enabled")?.getString()?.toBoolean() ?: false
+
         val typeMap = attrFields.map { attr ->
             val (name, type) = attr.split(" ")
             name to type
@@ -115,10 +124,21 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
             }
         }
 
+        var mcc:MemcachedClient? = null
+        val tt = TileTranscoder()
+
+        if(memcachedEnabled)
+            try {
+                mcc = MemcachedClient(InetSocketAddress(memcachedClientHost, memcachedClientPort))
+            } catch (e: ConnectException) {
+                memcachedEnabled = false
+            }
+
+
         val cluster = clusterBuilder.build()
         val session = cluster.connect(dbKeyspace)
         val exhauster = if (exhausterEnabled) Exhauster(exhausterHost, exhausterPort) else null
-        val tiler = Tyler(session, dbTable, addTimeStamp, attrFields, hashLevel, exhauster)
+        val tiler = Tyler(session, dbTable, addTimeStamp, attrFields, hashLevel, exhauster, memcachedEnabled, mcc)
         val fileWaitGroup = FileWaitGroup(tiler, tmpDirectory)
         val projector = Projector()
 
@@ -275,110 +295,123 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                     val x = call.parameters["x"]?.toInt() ?: -1
                     val y = call.parameters["y"]?.toInt() ?: -1
 
-                    val gson = Gson()
 
-                    val filters = gson.fromJson<Map<String, Any>>(call.parameters["filter"] ?: "{}", Map::class.java)
+                    val cacheTile = if(memcachedEnabled && z in zoomLevelStart..zoomLevelEnd) mcc?.get("tile/$z/$x/$y", tt) else null
 
-                    val mainFilter = (filters[mainAttr] ?: mainAttrDefault).toString()
-
-
-                    val hashes = when {
-                        z < hashLevel -> {
-                            val delta = hashLevel - z
-                            val xCurve1 = x shl delta
-                            val yCurve1 = y shl delta
-                            val xCurve2 = xCurve1 + Math.pow(2.toDouble(), delta.toDouble()).toInt() - 1
-                            val yCurve2 = yCurve1 + Math.pow(2.toDouble(), delta.toDouble()).toInt() - 1
-                            (ZcurveUtils.interleave(xCurve1, yCurve1)..ZcurveUtils.interleave(xCurve2, yCurve2)).toList()
-                        }
-                        z == hashLevel -> {
-                            listOf(ZcurveUtils.interleave(x, y))
-                        }
-                        else -> {
-                            val box = projector.tileBBox(z, x, y)
-
-                            val poly = Geometry.Polygon(coordinates = listOf(listOf(
-                                    listOf(box[0], box[1]),
-                                    listOf(box[2], box[1]),
-                                    listOf(box[2], box[3]),
-                                    listOf(box[0], box[3]),
-                                    listOf(box[0], box[1])
-                            )))
-
-                            val f = Feature(geometry = poly)
-                            val centroid = f.geometry.toJTS().centroid
-                            val tileNumber = projector.getTileNumber(centroid.y, centroid.x, hashLevel)
-
-                            listOf(ZcurveUtils.interleave(tileNumber.second, tileNumber.third))
-                        }
+                    if(memcachedEnabled && cacheTile != null) {
+                        call.respondBytes(cacheTile)
                     }
-                    endLog()
+                    else {
+                        // Lege eine Gson-Variable zur weiteren Verarbeitung fest
+                        val gson = Gson()
 
-                    val features = hashes.flatMap { zCurve ->
-                        val b = q.bind().setInt("hash", zCurve)
-                        if (mainAttr !in listOf("", "*")) {
-                            when (typeMap[mainAttr]) {
-                                "int" -> b.setInt("main", mainFilter.toInt())
-                                "date" -> {
-                                    val date = mainFilter.split("-")
-                                    b.setDate("main", LocalDate.fromYearMonthDay(date[0].toInt(), date[1].toInt(), date[2].toInt()))
-                                }
-                                "text" -> b.setString("main", mainFilter)
-                                "timestamp" -> TODO("type not supported yet")
-                                else -> TODO("type not supported yet")
+                        val filters = gson.fromJson<Map<String, Any>>(call.parameters["filter"] ?: "{}", Map::class.java)
+
+                        val mainFilter = (filters[mainAttr] ?: mainAttrDefault).toString()
+
+
+                        val hashes = when {
+                            z < hashLevel -> {
+                                val delta = hashLevel - z
+                                val xCurve1 = x shl delta
+                                val yCurve1 = y shl delta
+                                val xCurve2 = xCurve1 + Math.pow(2.toDouble(), delta.toDouble()).toInt() - 1
+                                val yCurve2 = yCurve1 + Math.pow(2.toDouble(), delta.toDouble()).toInt() - 1
+                                (ZcurveUtils.interleave(xCurve1, yCurve1)..ZcurveUtils.interleave(xCurve2, yCurve2)).toList()
+                            }
+                            z == hashLevel -> {
+                                listOf(ZcurveUtils.interleave(x, y))
+                            }
+                            else -> {
+                                val box = projector.tileBBox(z, x, y)
+
+                                val poly = Geometry.Polygon(coordinates = listOf(listOf(
+                                        listOf(box[0], box[1]),
+                                        listOf(box[2], box[1]),
+                                        listOf(box[2], box[3]),
+                                        listOf(box[0], box[3]),
+                                        listOf(box[0], box[1])
+                                )))
+
+                                val f = Feature(geometry = poly)
+                                val centroid = f.geometry.toJTS().centroid
+                                val tileNumber = projector.getTileNumber(centroid.y, centroid.x, hashLevel)
+
+                                listOf(ZcurveUtils.interleave(tileNumber.second, tileNumber.third))
                             }
                         }
-                        endLog = marker.startLogDuration("CQL statement execution")
-                        val res = session.execute(b)
                         endLog()
-                        res.map { row ->
 
-                            val attrMap = attributes.map { attr ->
-                                when (typeMap[attr]) {
-                                    "int" -> attr to Value.IntValue(row.getInt(attr).toLong())
-                                    "double" -> attr to Value.DoubleValue(row.getDouble(attr))
-                                    "date" -> attr to Value.StringValue(row.getDate(attr).toString())
-                                    "text" -> attr to Value.StringValue(row.getString(attr).toString())
+                        val features = hashes.flatMap { zCurve ->
+                            val b = q.bind().setInt("hash", zCurve)
+                            if (mainAttr !in listOf("", "*")) {
+                                when (typeMap[mainAttr]) {
+                                    "int" -> b.setInt("main", mainFilter.toInt())
+                                    "date" -> {
+                                        val date = mainFilter.split("-")
+                                        b.setDate("main", LocalDate.fromYearMonthDay(date[0].toInt(), date[1].toInt(), date[2].toInt()))
+                                    }
+                                    "text" -> b.setString("main", mainFilter)
                                     "timestamp" -> TODO("type not supported yet")
-                                    "uuid" -> attr to Value.StringValue(row.getUUID(attr).toString())
                                     else -> TODO("type not supported yet")
                                 }
-                            }.toMap()
-
-                            endLog = marker.startLogDuration("Prepare features")
-                            val projectedFeatures = projector.projectFeature(
-                                    Feature(
-                                            geometry = Geometry.fromWKT(row.getString("geometry"))!!,
-                                            properties = attrMap,
-                                            id = "0"
-                                    )
-                            )
+                            }
+                            endLog = marker.startLogDuration("CQL statement execution")
+                            val res = session.execute(b)
                             endLog()
-                            projectedFeatures
+                            res.map { row ->
+
+                                val attrMap = attributes.map { attr ->
+                                    when (typeMap[attr]) {
+                                        "int" -> attr to Value.IntValue(row.getInt(attr).toLong())
+                                        "double" -> attr to Value.DoubleValue(row.getDouble(attr))
+                                        "date" -> attr to Value.StringValue(row.getDate(attr).toString())
+                                        "text" -> attr to Value.StringValue(row.getString(attr).toString())
+                                        "timestamp" -> TODO("type not supported yet")
+                                        "uuid" -> attr to Value.StringValue(row.getUUID(attr).toString())
+                                        else -> TODO("type not supported yet")
+                                    }
+                                }.toMap()
+
+                                endLog = marker.startLogDuration("Prepare features")
+                                val projectedFeatures = projector.projectFeature(
+                                        Feature(
+                                                geometry = Geometry.fromWKT(row.getString("geometry"))!!,
+                                                properties = attrMap,
+                                                id = "0"
+                                        )
+                                )
+                                endLog()
+                                projectedFeatures
+                            }
                         }
+
+                        endLog = marker.startLogDuration("prepare features for encoding")
+                        val geojson = GeoJSON(features = features)
+
+                        val z2 = 1 shl (if (z == 0) 0 else z)
+
+                        val k1 = 0.5 * buffer / extend
+                        val k3 = 1 + k1
+
+                        projector.calcBbox(geojson)
+
+                        val clipper = Clipper()
+                        val clipped = clipper.clip(geojson, z2.toDouble(), x - k1, x + k3, y - k1, y + k3)
+                        val tile = projector.transformTile(Tile(clipped, (1 shl z), x, y))
+
+                        val encoder = Encoder()
+
+                        endLog()
+                        endLog = marker.startLogDuration("encode and transmit")
+                        val encoded = encoder.encode(tile.geojson.features, baseLayer)
+
+                        call.respondBytes(encoded.toByteArray())
+
+                        if(memcachedEnabled && z in zoomLevelStart..zoomLevelEnd)
+                            mcc?.set("tile/$z/$x/$y", 10000, encoded.toByteArray(), tt)
+
                     }
-
-                    endLog = marker.startLogDuration("prepare features for encoding")
-                    val geojson = GeoJSON(features = features)
-
-                    val z2 = 1 shl (if (z == 0) 0 else z)
-
-                    val k1 = 0.5 * buffer / extend
-                    val k3 = 1 + k1
-
-                    projector.calcBbox(geojson)
-
-                    val clipper = Clipper()
-                    val clipped = clipper.clip(geojson, z2.toDouble(), x - k1, x + k3, y - k1, y + k3)
-                    val tile = projector.transformTile(Tile(clipped, (1 shl z), x, y))
-
-                    val encoder = Encoder()
-
-                    endLog()
-                    endLog = marker.startLogDuration("encode and transmit")
-                    val encoded = encoder.encode(tile.geojson.features, baseLayer)
-
-                    call.respondBytes(encoded.toByteArray())
                     endLog()
                 }
 
@@ -434,6 +467,12 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                     val y = call.parameters["y"]?.toInt() ?: -1
 
 
+                val cacheTile = if(memcachedEnabled && z in zoomLevelStart..zoomLevelEnd) mcc?.get("heatmap/$z/$x/$y", tt) else null
+
+                if(cacheTile != null) {
+                    call.respondBytes(cacheTile)
+                }
+                else {
                     val box = projector.tileBBox(z, x, y)
 
                     val poly = Geometry.Polygon(coordinates = listOf(listOf(
@@ -511,7 +550,11 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                     val encoded = encoder.encode(tile.geojson.features, baseLayer)
 
                     call.respondBytes(encoded.toByteArray())
+
+                    if(memcachedEnabled && z in zoomLevelStart..zoomLevelEnd)
+                        mcc?.set("heatmap/$z/$x/$y", 10000, encoded.toByteArray(), tt)
                 }
+            }
 
                 static("/static") {
                     resources("static")
