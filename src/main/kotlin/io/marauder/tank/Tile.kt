@@ -40,4 +40,16 @@ class Tile (val x: Int, val y: Int, val z: Int){
         return intersect.area / poly.toJTS().area
     }
 
+    override fun toString():String {
+        return "Tile($x,$y, $z)"
+    }
+
+    override fun equals(other: Any?): Boolean =
+        if (other is Tile) {
+            x == other.x && y == other.y && z == other.z
+        } else {
+            false
+        }
+
+
 }
