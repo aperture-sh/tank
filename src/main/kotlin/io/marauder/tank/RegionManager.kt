@@ -161,27 +161,6 @@ class RegionManager(
         featuresImported = 0
     }
 
-    /**
-     * Top-Down
-     */
-    private fun invalidateCacheTD(geo : Geometry) {
-        removeRequests++
-        val tileLookUp = ArrayList<Tile>()
-
-        tileLookUp.add(Tile(0,0,0))
-
-        while(tileLookUp.isNotEmpty()) {
-            if(tileLookUp[0].z <= 21) {
-                if(tileLookUp[0].getGeometry().toJTS().intersects(geo.toJTS())) {
-                    tileLookUp.addAll(tileLookUp[0].getChildren())
-                    removeTile(tileLookUp[0])
-                }
-            }
-            tileLookUp.removeAt(0)
-        }
-
-    }
-
 
     /**
      * Covering
@@ -195,33 +174,6 @@ class RegionManager(
         while(tileLookUp.isNotEmpty()) {
             if(tileLookUp[0].z <= cacheZoomLevelEnd) {
                 if(tileLookUp[0].getGeometry().toJTS().coveredBy(geo.toJTS())) {
-                    invalCacheAllChildren(tileLookUp[0])
-                }
-
-                else if(tileLookUp[0].getGeometry().toJTS().intersects(geo.toJTS())) {
-                    tileLookUp.addAll(tileLookUp[0].getChildren())
-                    removeTile(tileLookUp[0])
-                }
-            }
-            tileLookUp.removeAt(0)
-        }
-    }
-
-
-    /**
-     * ThreeQuarters
-     */
-    private fun invalCacheTQ(geo : Geometry) {
-        removeRequests++
-        val tileLookUp = ArrayList<Tile>()
-
-        tileLookUp.add(Tile(0,0,0))
-
-        while(tileLookUp.isNotEmpty()) {
-            if(tileLookUp[0].z <= cacheZoomLevelEnd) {
-                if(tileLookUp[0].getGeometry().toJTS().coveredBy(geo.toJTS()) ||
-                        tileLookUp[0].getIntersection(geo) > 0.75
-                ) {
                     invalCacheAllChildren(tileLookUp[0])
                 }
 
