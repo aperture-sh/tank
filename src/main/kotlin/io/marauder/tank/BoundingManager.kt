@@ -3,30 +3,17 @@ package io.marauder.tank
 import io.marauder.charged.models.Feature
 import io.marauder.charged.models.Geometry
 import net.spy.memcached.MemcachedClient
-import org.slf4j.Logger
 import java.util.ArrayList
 
 class BoundingManager (private val cacheBoundingThreshold: Int,
                        private val memcachedEnabled: Boolean = false,
                        private val cacheZoomLevelEnd: Int,
-                       private val mcc : MemcachedClient?,
-                       private val log: Logger
+                       private val mcc : MemcachedClient?
 ){
     private val tilingSet = arrayListOf<Tile>()
 
-
-
-    // Debugging
-    private var removeTileRequests = 0
-    private var removeRequests = 0
-    private var featuresImported = 0
-    private var calcTiles = 0
-
-
     fun add(f: Feature) {
         if(!memcachedEnabled) return
-
-        featuresImported++
 
         invalCacheCV(f.geometry)
 
@@ -35,26 +22,12 @@ class BoundingManager (private val cacheBoundingThreshold: Int,
         }
     }
 
-
-    private fun clearTilingSet() {
-        removeRequests++
-        tilingSet.forEach{t->
-            removeTile(t)
-        }
-        tilingSet.clear()
-    }
-
-
     fun flush() {
         if(!memcachedEnabled) return
+
         clearTilingSet()
 
         tilingSet.clear()
-
-        log.info("Tile-Requests = $removeTileRequests  Remove-Requests = $removeRequests  Features-Imported: $featuresImported calculated Tiles= $calcTiles" )
-        removeRequests = 0
-        removeTileRequests = 0
-        featuresImported = 0
     }
 
 
@@ -74,13 +47,19 @@ class BoundingManager (private val cacheBoundingThreshold: Int,
 
                 else if(tileLookUp[0].getGeometry().toJTS().intersects(geo.toJTS())) {
                     tileLookUp.addAll(tileLookUp[0].getChildren())
-                    if(!tilingSet.contains(tileLookUp[0]))
-                        tilingSet.add(tileLookUp[0])
-                    calcTiles++
+                    safeAddToSet(tileLookUp[0])
                 }
             }
             tileLookUp.removeAt(0)
         }
+    }
+
+    private fun clearTilingSet() {
+        tilingSet.forEach{t->
+            removeTile(t)
+        }
+
+        tilingSet.clear()
     }
 
     private fun invalCacheAllChildren(t : Tile) {
@@ -92,11 +71,14 @@ class BoundingManager (private val cacheBoundingThreshold: Int,
             if(queue[0].z < cacheZoomLevelEnd) {
                 queue.addAll(queue[0].getChildren())
             }
-            if(!tilingSet.contains(queue[0]))
-                tilingSet.add(queue[0])
+            safeAddToSet(queue[0])
             queue.removeAt(0)
-            calcTiles++
         }
+    }
+
+    private fun safeAddToSet(t: Tile) {
+        if(!tilingSet.contains(t))
+            tilingSet.add(t)
     }
 
 
@@ -104,7 +86,6 @@ class BoundingManager (private val cacheBoundingThreshold: Int,
         if(memcachedEnabled) {
             mcc?.delete("heatmap/" + t.z + "/" + t.x + "/" + t.y)
             mcc?.delete("tile/" + t.z + "/" + t.x + "/" + t.y)
-            removeTileRequests++
         }
     }
 }

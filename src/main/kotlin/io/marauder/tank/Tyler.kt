@@ -40,8 +40,8 @@ class Tyler(
     """.trimIndent())
 
     private val projector = Projector()
-    private val regionManager = RegionManager(chacheRegionCount, cacheRegionThreshold, memcachedEnabled, cacheZoomLevelEnd, mcc, log)
-    private val boundingManager = BoundingManager(cacheBoundingThreshold, memcachedEnabled, cacheZoomLevelEnd, mcc, log)
+    private val regionManager = RegionManager(chacheRegionCount, cacheRegionThreshold, memcachedEnabled, cacheZoomLevelEnd, mcc)
+    private val boundingManager = BoundingManager(cacheBoundingThreshold, memcachedEnabled, cacheZoomLevelEnd, mcc)
 
     private var delay = 0L
 
@@ -179,7 +179,7 @@ class Tyler(
     }
 
     fun closeCaching() {
-        regionManager.flush();
+        regionManager.flush()
         boundingManager.flush()
     }
 
