@@ -1,5 +1,6 @@
 package io.marauder.tank
 
+import io.ktor.application.log
 import io.marauder.charged.models.Feature
 import kotlinx.coroutines.*
 import kotlinx.serialization.ImplicitReflectionSerializer
@@ -8,6 +9,7 @@ import kotlinx.serialization.json.JsonParsingException
 import org.slf4j.LoggerFactory
 import java.io.BufferedReader
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 @ImplicitReflectionSerializer
 class FileWaitGroup(private val tyler: Tyler, private val tmpDir : String) {
@@ -15,6 +17,7 @@ class FileWaitGroup(private val tyler: Tyler, private val tmpDir : String) {
     private var runners = 0
 
     suspend fun startRunner() {
+        val startTime = System.nanoTime()
         if (runners < maxRunners) {
             runner@while (true) {
                 val fileList = File(tmpDir).listFiles { _, name -> !name.contains(".lock")}
@@ -48,7 +51,10 @@ class FileWaitGroup(private val tyler: Tyler, private val tmpDir : String) {
                     }
                     GlobalScope.launch {
                         job.join()
+                        tyler.closeCaching()
                         log.info("Finished processing file: ${file.name}")
+                        val duration = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime)
+                        log.info("$duration ms")
                         tmpFile.delete()
                         runners -= 1
                     }

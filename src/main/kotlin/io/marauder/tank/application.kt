@@ -40,6 +40,7 @@ import java.util.UUID
 import net.spy.memcached.MemcachedClient
 import java.net.ConnectException
 import java.net.InetSocketAddress
+import java.util.concurrent.TimeUnit
 
 
 fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
@@ -89,6 +90,9 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
         val memcachedClientHost = environment.config.propertyOrNull("ktor.application.memcached_client_host")?.getString() ?: "127.0.0.1"
         val memcachedClientPort = environment.config.propertyOrNull("ktor.application.memcached_client_port")?.getString()?.toInt() ?: 11211
         var memcachedEnabled = environment.config.propertyOrNull("ktor.application.memcached_enabled")?.getString()?.toBoolean() ?: false
+        val cacheRegionCount = environment.config.propertyOrNull("ktor.application.cache_region_count")?.getString()?.toInt() ?: 5
+        val cacheRegionThreshold = environment.config.propertyOrNull("ktor.application.cache_region_threshold")?.getString()?.toInt() ?: 300
+        val cacheBoundingThreshold = environment.config.propertyOrNull("ktor.application.cache_bounding_threshold")?.getString()?.toInt() ?: 1000
 
         val typeMap = attrFields.map { attr ->
             val (name, type) = attr.split(" ")
@@ -138,7 +142,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
         val cluster = clusterBuilder.build()
         val session = cluster.connect(dbKeyspace)
         val exhauster = if (exhausterEnabled) Exhauster(exhausterHost, exhausterPort) else null
-        val tiler = Tyler(session, dbTable, addTimeStamp, attrFields, hashLevel, exhauster, memcachedEnabled, mcc)
+        val tiler = Tyler(session, dbTable, addTimeStamp, attrFields, hashLevel, exhauster, memcachedEnabled, mcc, cacheRegionCount, cacheRegionThreshold, zoomLevelEnd, cacheBoundingThreshold)
         val fileWaitGroup = FileWaitGroup(tiler, tmpDirectory)
         val projector = Projector()
 
