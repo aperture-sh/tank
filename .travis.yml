@@ -8,7 +8,7 @@ env:
   global:
     - JAVA_OPTS="-Xmx512m"
 jdk:
-  - oraclejdk8
+  - openjdk8
 script:
   - ./gradlew check && ./gradlew installDist
   - make image
