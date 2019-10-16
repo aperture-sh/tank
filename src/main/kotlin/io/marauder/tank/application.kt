@@ -225,6 +225,21 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                     if (baseLayer == "" && importLayer == "") {
                         call.respondText("Import layer must not be an empty string", status = HttpStatusCode.BadRequest)
                     } else {
+                        try {
+                            val uid = tiler.import(JSON.plain.parse<Feature>(call.receiveText()))
+                            call.respondText("{\"msg\": \"feature imported\", \"id\": \"${uid}\"}", contentType = ContentType.Application.Json, status = HttpStatusCode.Created)
+                        } catch (e: Exception) {
+                            call.respondText("{\"msg\": \"${e.message}\"}", contentType = ContentType.Application.Json, status = HttpStatusCode.InternalServerError)
+                        }
+
+                    }
+                }
+
+                post("/_bulk/{layer?}") {
+                    val importLayer = call.parameters["layer"] ?: ""
+                    if (baseLayer == "" && importLayer == "") {
+                        call.respondText("Import layer must not be an empty string", status = HttpStatusCode.BadRequest)
+                    } else {
                         val layer = "$baseLayer${if (baseLayer != "" && importLayer != "") "." else ""}$importLayer"
                         val importId = UUID.randomUUID()
                         val importFile = File("$tmpDirectory/$importId")

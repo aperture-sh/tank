@@ -57,7 +57,7 @@ class Tyler(
         log.info("#${input.features.size} features importing finished")
     }
 
-    suspend fun import(f: Feature) {
+    suspend fun import(f: Feature) : UUID? {
         var endLog = marker.startLogDuration("prepare geometry")
         val uuid = UUID.randomUUID()
 
@@ -157,7 +157,7 @@ class Tyler(
                 } else {
                     log.warn("Feature skipped due property type collision (cause ${e.message}).")
                 }
-                break@retry
+                return null
             } catch (e: NumberFormatException) {
                 if (exhauster != null) {
                     GlobalScope.launch {
@@ -166,7 +166,7 @@ class Tyler(
                 } else {
                     log.warn("Feature skipped due property type collision (cause ${e.message}).")
                 }
-                break@retry
+                return null
             } catch (e: QueryExecutionException) {
                 log.warn("Increasing query execution delay due high DB usage (now at $delay ms, cause ${e.message})")
                 delay += delay + 1000
@@ -176,6 +176,7 @@ class Tyler(
             }
 
         } while (true)
+        return uuid
     }
 
     fun closeCaching() {
