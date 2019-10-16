@@ -57,9 +57,9 @@ class Tyler(
         log.info("#${input.features.size} features importing finished")
     }
 
-    suspend fun import(f: Feature) : UUID? {
+    suspend fun import(f: Feature, uuid: UUID? = null) : UUID? {
         var endLog = marker.startLogDuration("prepare geometry")
-        val uuid = UUID.randomUUID()
+        val actualUUID = uuid ?: UUID.randomUUID()
 
         retry@do {
             try {
@@ -132,7 +132,7 @@ class Tyler(
 
                 bound.setString("geometry", f.geometry.toWKT())
                 bound.setInt("hash", hash)
-                bound.setUUID("uid", uuid)
+                bound.setUUID("uid", actualUUID)
 
                 endLog()
 
@@ -152,7 +152,7 @@ class Tyler(
             } catch (e: ClassCastException) {
                 if (exhauster != null) {
                     GlobalScope.launch {
-                        exhauster.pushFeature(uuid, f)
+                        exhauster.pushFeature(actualUUID, f)
                     }
                 } else {
                     log.warn("Feature skipped due property type collision (cause ${e.message}).")
@@ -161,7 +161,7 @@ class Tyler(
             } catch (e: NumberFormatException) {
                 if (exhauster != null) {
                     GlobalScope.launch {
-                        exhauster.pushFeature(uuid, f)
+                        exhauster.pushFeature(actualUUID, f)
                     }
                 } else {
                     log.warn("Feature skipped due property type collision (cause ${e.message}).")
@@ -176,7 +176,7 @@ class Tyler(
             }
 
         } while (true)
-        return uuid
+        return actualUUID
     }
 
     fun closeCaching() {

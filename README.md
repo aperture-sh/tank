@@ -32,6 +32,7 @@ Connecting to DB is possible using the cqshl:
 `GET /` - Print Tank info message  
 `GET /:uuid` - Receive one specific feature in GeoJSON format
 `DELETE /:uuid` - Delete one specific feature  
+`PUT /:uuid` - Update existing feature
 `POST /:layer?` accepts exact one GeoJSON feature to import in the HTTP Body, the layer parameter is not used at the current release  
 `POST /_bulk/:layer?` accepts GeoJSON features separated by line to import, `geojson=true` indicates to import a GeoJSON file, the layer parameter is not used at the current release  
 `GET /tile/:z/:x/:y` - Request a tile, put `filter={"main_attr": "test"}` to filter the main attribute  

@@ -38,6 +38,7 @@ import java.lang.Exception
 import java.util.UUID
 
 import net.spy.memcached.MemcachedClient
+import java.lang.IllegalArgumentException
 import java.net.ConnectException
 import java.net.InetSocketAddress
 import java.util.concurrent.TimeUnit
@@ -159,6 +160,12 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
         val queryDeleteOne = """
                     DELETE FROM $dbTable WHERE hash = :hash AND uid = :uuid;
                 """.trimIndent()
+
+        val queryUpdateOne = """
+            UPDATE $dbTable
+            SET :key = :value
+            WHERE hash = :hash AND uid = :uuid;
+        """.trimIndent()
 
         val deleteQuery = """
             | DELETE
@@ -302,6 +309,39 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                                 .setInt("hash", featureRaw.getInt("hash"))
                         session.execute(boundDelete)
                         call.respondText(status = HttpStatusCode.OK, text = "{\"msg\": \"item deleted\", \"id\": \"$uuid\"}", contentType = ContentType.Application.Json)
+                    } else {
+                        call.respondText(status = HttpStatusCode.NotFound, text = "{\"msg\": \"item not found\", \"id\": \"$uuid\"}", contentType = ContentType.Application.Json)
+                    }
+                }
+
+                put("/{uuid}") {
+                    val uuid = call.parameters["uuid"] ?: ""
+                    if (uuid != "") {
+                        val boundGet = qOne.bind().setUUID("uuid", UUID.fromString(uuid))
+                        val featureRaw = session.execute(boundGet).first()
+
+                        val boundDelete = deleteOne.bind()
+                                .setUUID("uuid", UUID.fromString(uuid))
+                                .setInt("hash", featureRaw.getInt("hash"))
+                        session.execute(boundDelete)
+                        val properties: Map<String, Value> = typeMap.filter { it.key !in listOf("timestamp") }.map { attr ->
+                            when (attr.value) {
+                                "int" -> attr.key to Value.IntValue(featureRaw.getInt(attr.key).toLong())
+                                "double" -> attr.key to Value.DoubleValue(featureRaw.getDouble(attr.key))
+                                "date" -> attr.key to Value.StringValue(featureRaw.getDate(attr.key).toString())
+                                "text" -> attr.key to Value.StringValue(featureRaw.getString(attr.key).toString())
+                                "timestamp" -> TODO("type not supported yet")
+                                "uuid" -> attr.key to Value.StringValue(featureRaw.getUUID(attr.key).toString())
+                                else -> TODO("type not supported yet")
+                            }
+                        }.toMap()
+                        val f = Feature(
+                                id = uuid,
+                                geometry = Geometry.fromWKT(featureRaw.getString("geometry"))!!,
+                                properties = properties
+                        )
+                        tiler.import(f, UUID.fromString(uuid))
+                        call.respondText(status = HttpStatusCode.OK, text = "{\"msg\": \"item updated\", \"id\": \"$uuid\"}", contentType = ContentType.Application.Json)
                     } else {
                         call.respondText(status = HttpStatusCode.NotFound, text = "{\"msg\": \"item not found\", \"id\": \"$uuid\"}", contentType = ContentType.Application.Json)
                     }
@@ -604,6 +644,9 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                         call.respondText(status = HttpStatusCode.NotFound, text = "{\"msg\": \"item not found\"}", contentType = ContentType.Application.Json)
                     }
 
+                    exception<IllegalArgumentException> { cause ->
+                        call.respondText(status = HttpStatusCode.BadRequest, text = "{\"msg\": \"illegal argmuent\", \"cause\": \"${cause.message}\"}", contentType = ContentType.Application.Json)
+                    }
                 }
             }
         }
