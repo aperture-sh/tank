@@ -17,7 +17,7 @@ RUN chown -R $APPLICATION_USER /storage
 
 USER $APPLICATION_USER
 
-EXPOSE 23513/tcp
+EXPOSE 8888/tcp
 
 COPY --from=build /build/build/install/tank /app
 COPY --from=build /build/resources/application.conf /app/application.conf
