@@ -1,5 +1,5 @@
 # Tank
-[![Apache License, Version 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0) [![Build Status](https://travis-ci.org/aperture-sh/tank.svg?branch=master)](https://travis-ci.org/aperture-sh/tank) [![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/ap3rture/tank)](https://hub.docker.com/r/ap3rture/tank)
+[![Apache License, Version 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0) [![Build Status](https://travis-ci.org/aperture-sh/tank.svg?branch=master)](https://travis-ci.org/aperture-sh/tank)
 
 ## Visualization Focused Database
 
@@ -19,7 +19,7 @@ The easiest way to get a tank instance including the [Navigator UI](https://gith
 
 #### Docker 
 * Notice prerequisites
-* Run `docker run --name tank -d -p 8888:8888 -e TANK_DB_HOSTS=cassandra --link cassandra ap3rture/tank:latest`
+* Run `docker run --name tank -d -p 8888:8888 -e TANK_DB_HOSTS=cassandra --link cassandra docker.pkg.github.com/aperture-sh/tank/tank:latest`
 
 ### Prerequisites
 Run a Cassandra instance:  

@@ -7,7 +7,7 @@ services:
     - cassandra_data:/var/lib/cassandra
 
   tank:
-    image: ap3rture/tank:latest
+    image: docker.pkg.github.com/aperture-sh/tank/tank:latest
     environment:
       - TANK_DB_HOSTS=cassandra
       - TANK_EXHAUSTER_ENABLED=true
