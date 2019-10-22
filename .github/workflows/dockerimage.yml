@@ -4,7 +4,6 @@ on:
   push:
     branches:
     - master
-    - never_use
 
 jobs:
 
@@ -24,6 +23,6 @@ jobs:
       env:
         GITHUB_REPOSITORY: $GITHUB_REPOSITORY
     - name: Push to Github
-      run: docker push docker.pkg.github.com/aperture-sh/${GITHUB_REPOSITORY}/tank:latest
+      run: docker push docker.pkg.github.com/${GITHUB_REPOSITORY}/tank:latest
       env:
         GITHUB_REPOSITORY: $GITHUB_REPOSITORY
