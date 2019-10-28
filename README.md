@@ -14,6 +14,7 @@ The easiest way to get a tank instance including the [Navigator UI](https://gith
 
 #### Docker Compose
 
+* Hint: Due to a GitHub Issue you need to login to the docker registry first: `docker login docker.pkg.github.com` (use your github username and a token with package read/wirite permissions)
 * Run `docker-compose up`.
 * UI should be reachable: `http://localhost:8081/navigator/`
 
@@ -23,7 +24,7 @@ The easiest way to get a tank instance including the [Navigator UI](https://gith
 
 ### Prerequisites
 Run a Cassandra instance:  
-`docker run --name cassandra -d  -p 9042:9042 ap3rture/cassandra-lucene:latest`  
+`docker run --name cassandra -d  -p 9042:9042 docker.pkg.github.com/aperture-sh/cassandra-lucene-docker/cassandra-lucene:latest`  
 Connecting to DB is possible using the cqshl:  
 `docker run -it --link cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR"'`
 
