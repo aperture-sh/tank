@@ -2,7 +2,7 @@ version: '3'
 
 services:
   cassandra:
-    image: ap3rture/cassandra-lucene:latest
+    image: docker.pkg.github.com/aperture-sh/cassandra-lucene-docker/cassandra-lucene:latest
     volumes:
     - cassandra_data:/var/lib/cassandra
 
@@ -24,14 +24,14 @@ services:
       - mongo_data:/data/db
 
   exhauster:
-    image: ap3rture/exhauster:latest
+    image: docker.pkg.github.com/aperture-sh/exhauster/exhauster:latest
     environment:
       - EXHAUSTER_MONGO_HOST=mongo
     ports:
       - 8080:8080
 
   navigator:
-    image: ap3rture/navigator:latest
+    image: docker.pkg.github.com/aperture-sh/navigator/navigator:latest
     ports:
       - 8081:80
 
