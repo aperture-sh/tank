@@ -465,7 +465,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                         endLog = marker.startLogDuration("encode and transmit")
                         val encoded = encoder.encode(tile.geojson.features, baseLayer)
 
-                        call.respondBytes(encoded.toByteArray())
+                        call.respondBytes(encoded.toByteArray(), ContentType.parse("application/vnd.mapbox-vector-tile"))
 
                         if(memcachedEnabled && z in zoomLevelStart..zoomLevelEnd)
                             mcc?.set("tile/$z/$x/$y", 10000, encoded.toByteArray(), tt)
@@ -608,7 +608,7 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
 
                     val encoded = encoder.encode(tile.geojson.features, baseLayer)
 
-                    call.respondBytes(encoded.toByteArray())
+                    call.respondBytes(encoded.toByteArray(), ContentType.parse("application/vnd.mapbox-vector-tile"))
 
                     if(memcachedEnabled && z in zoomLevelStart..zoomLevelEnd)
                         mcc?.set("heatmap/$z/$x/$y", 10000, encoded.toByteArray(), tt)
