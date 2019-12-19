@@ -361,7 +361,6 @@ fun main(args: Array<String>): Unit = io.ktor.server.jetty.EngineMain.main(args)
                         call.respondBytes(cacheTile)
                     }
                     else {
-                        // Lege eine Gson-Variable zur weiteren Verarbeitung fest
                         val gson = Gson()
 
                         val filters = gson.fromJson<Map<String, Any>>(call.parameters["filter"] ?: "{}", Map::class.java)
