@@ -59,7 +59,7 @@ class Tyler(
 
     suspend fun import(f: Feature, uuid: UUID? = null) : UUID? {
         var endLog = marker.startLogDuration("prepare geometry")
-        val actualUUID = uuid ?: UUID.randomUUID()
+        val actualUUID = uuid ?: if (f.id != "") f.id else UUID.randomUUID()
 
         retry@do {
             try {
